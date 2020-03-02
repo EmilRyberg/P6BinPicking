@@ -173,7 +173,6 @@ class MoveRobot:
         self.gripper.send(msg)
         time.sleep(2)
 
-
     def move_gripper(self, position):
         msg = "move({})\n".format(position)
         msg = msg.encode()
@@ -191,16 +190,15 @@ class MoveRobot:
         self.move_to_home()
         rx = math.radians(rx)       #these will only be needed if we call grip with rx,ry and rz as degrees
         ry = math.radians(ry)
-        rx = math.radians(rz)
+        rz = math.radians(rz)
+        orientation_vector = [rx, ry, rz]
         self.current_part_id = part_id
         self.grip_has_been_called_flag = True
         if part_id == PartEnum.PCB.value or part_id == PartEnum.PCB_FLIPPED.value:
             print("gripping PCB")
-            orientation_vector = [0, 0, -1.57]
             self.move_to_home()
             self.robot.set_tcp(self.suction_tcp)
             self.move_to_home_l()
-            orientation_vector = [rx, ry, rz]
             self.movel([x, y, 40] + orientation_vector, vel=1) #will need to change the 40 to a static place above the box
             self.enable_suction()
             self.movel([x, y, z] + orientation_vector, vel=0.2)
@@ -210,7 +208,6 @@ class MoveRobot:
             self.move_to_home()
             self.robot.set_tcp(self.fuse_tcp)
             self.move_to_home_l()
-            orientation_vector = [rx, ry, rz]
             self.movel([x, y, 20] + orientation_vector, vel=1) #will need to change the 20 to a static place above the box
             self.movel([x, y, z] + orientation_vector, vel=0.2)
             self.close_gripper()
@@ -218,7 +215,6 @@ class MoveRobot:
         else:  # covers
             print("gripping cover")
             self.move_to_home()
-            orientation_vector = [rx, ry, rz]
             self.robot.set_tcp(self.gripper_tcp)
             self.move_to_home_l()
             self.movel([x, y, 20] + orientation_vector, acc=1, vel=1) #will need to change the 20 to a static place above the box
