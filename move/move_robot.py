@@ -188,7 +188,7 @@ class MoveRobot:
     def grip(self, x, y, z, rx, ry, rz, part_id, width):  # 0 = part horizontal, 1 = part vertical
         self.move_gripper(100)
         self.move_to_home()
-        rx = math.radians(rx)       #these will only be needed if we call grip with rx,ry and rz as degrees
+        rx = math.radians(rx) #these will only be needed if we call grip with rx,ry and rz as degrees
         ry = math.radians(ry)
         rz = math.radians(rz)
         orientation_vector = [rx, ry, rz]
@@ -199,29 +199,36 @@ class MoveRobot:
             self.move_to_home()
             self.robot.set_tcp(self.suction_tcp)
             self.move_to_home_l()
-            self.movel([x, y, 40] + orientation_vector, vel=1) #will need to change the 40 to a static place above the box
+            self.movel([x, y, 300] + orientation_vector, vel=1)
+            self.movel([x, y, z+40]+orientation_vector,vel=0.2)
             self.enable_suction()
             self.movel([x, y, z] + orientation_vector, vel=0.2)
-            self.movel([x, y, 40] + orientation_vector, vel=0.2) #will need to change the 40 to a static place above the box
+            self.movel([x, y, z+40]+orientation_vector,vel=0.2)
+            self.movel([x, y, 300] + orientation_vector, vel=0.2)
         elif part_id == PartEnum.FUSE.value:
             print("gripping fuse")
+            #orientation_vector[2] = rz+90  might need to do some angle offsets for fuses when we get to those
             self.move_to_home()
             self.robot.set_tcp(self.fuse_tcp)
             self.move_to_home_l()
-            self.movel([x, y, 20] + orientation_vector, vel=1) #will need to change the 20 to a static place above the box
+            self.movel([x, y, 300] + orientation_vector, vel=1)
+            self.movel([x, y, z+20] + orientation_vector, vel=0.2)
             self.movel([x, y, z] + orientation_vector, vel=0.2)
             self.close_gripper()
-            self.movel([x, y, 20] + orientation_vector, vel=0.2) #will need to change the 20 to a static place above the box
+            self.movel([x, y, z+20] + orientation_vector, vel=0.2)
+            self.movel([x, y, 300] + orientation_vector, vel=0.2)
         else:  # covers
             print("gripping cover")
             self.move_to_home()
             self.robot.set_tcp(self.gripper_tcp)
             self.move_to_home_l()
-            self.movel([x, y, 20] + orientation_vector, acc=1, vel=1) #will need to change the 20 to a static place above the box
+            self.movel([x, y, 300] + orientation_vector, vel=1) 
+            self.movel([x, y, z+20]+orientation_vector, vel=0.2)
             self.open_gripper()
-            self.movel([x, y, z] + orientation_vector, acc=1, vel=0.2)
+            self.movel([x, y, z] + orientation_vector, vel=0.2)
             self.close_gripper()
-            self.movel([x, y, 20] + orientation_vector, acc=1, vel=0.2) #will need to change the 20 to a static place above the box
+            self.movel([x, y, 20] + orientation_vector, vel=0.2) 
+            self.movel([x, y, 300]+orientation_vector, vel=1)
 
     def assemble(self, x=320, y=-350, z=0, rotated=False, fuse_id=0):
         if self.moved_to_camera_flag:
