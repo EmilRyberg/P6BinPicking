@@ -5,11 +5,13 @@ from PIL import ImageDraw
 import cv2
 import imutils 
 import numpy as np
+import scipy.misc
 from enums import PartEnum, OrientationEnum
 import os
 ###from orientation_detector import OrientationDetector
 from class_converter import convert_to_part_id
 from utils import image_shifter
+
 
 ###YOLOCFGPATH = '/DarkNet/'
 IMAGE_NAME = "webcam_capture.png"
@@ -124,45 +126,49 @@ class Vision:
         return self.image_path
 
     def find_center(self, mask):
-        kernel = np.ones((5,5),np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        kernel = np.ones((10,10),np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        cv2.imshow("Image", mask)
-        cv2.waitKey(0)
+        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        #cv2.imshow("MORPH", mask)
+        #cv2.waitKey(0)
 
-
-        contour = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contour = imutils.grab_contours(contour)
-        M = cv2.moments(contour)
-        center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
-        cv2.drawContours(mask, [0], -1, (0, 255, 0), 2)
-        cv2.circle(mask, (center[0], center[1]), 7, (255, 255, 255), -1)
-        cv2.putText(mask, "center", (center[0] - 20, center[1] - 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-        cv2.imshow("Image", mask)
-        cv2.waitKey(0)
-        return center
+        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+                                cv2.CHAIN_APPROX_SIMPLE)
+        cnts = imutils.grab_contours(cnts)
+        for c in cnts:
+            # compute the center of the contour
+            M = cv2.moments(c)
+            cX = int(M["m10"] / M["m00"])
+            cY = int(M["m01"] / M["m00"])
+            # draw the contour and center of the shape on the image
+            #mask_coloured = cv2.cvtColor(mask,cv2.COLOR_GRAY2RGB)
+            #cv2.drawContours(mask_coloured, [c], -1, (0, 255, 0), 2)
+            #cv2.circle(mask_coloured, (cX, cY), 7, (255, 0, 255), -1)
+            #cv2.putText(mask_coloured, "center", (cX - 20, cY - 20),
+                        #cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
+            # show the image
+            #cv2.imshow("CENTER", mask_coloured)
+            #cv2.waitKey(0)
+            return cX, cY
 
     def get_z(self, x, y, depth_image):
-        z = depth_image.at<char>(point[0],point[1])
+        z = depth_image[x,y,0]
+        print(z)
         return z
 
-    def vector_normal(self, centerpoint, mask, depthimage):
-        A = np.array([centerpoint[0], centerpoint[1], 0])
-        B = np.array([centerpoint[0]-100, centerpoint[1]-100, 0])
-        C = np.array([centerpoint[0]+100, centerpoint[1]-100, 0])
-        D = np.array([centerpoint[0]-100, centerpoint[1]+100, 0])
+    def vector_normal(self, x, y, mask, depthimage):
+        A = np.array([x, y, self.get_z(x, y, depthimage)])
+        B = np.array([x-10, y-10, self.get_z(x-10, y-10, depthimage)])
+        C = np.array([x+10, y-10, self.get_z(x+10, y-10, depthimage)])
+        D = np.array([x-10, y+10, self.get_z(x-10, y+10, depthimage)])
 
-        A[2] = self.get_z(A[0], A[1], depthimage)
-        B[2] = self.get_z(B[0], B[1], depthimage)
-        C[2] = self.get_z(C[0], C[1], depthimage)
-        D[2] = self.get_z(D[0], D[1], depthimage)
 
         vector1 = D-B
         vector2 = C-B
         normal_vector = np.cross(vector1, vector2)
-
-        """ DEBUG CODE FOR VISUALISATION
+        print(normal_vector)
+        """
+        #DEBUG CODE FOR VISUALISATION
         a, b, c = normal_vector
 
         # This evaluates a * x3 + b * y3 + c * z3 which equals d
@@ -189,22 +195,28 @@ class Vision:
         # plot the original points. We use zip to get 1D lists of x, y and z
         # coordinates.
         ax.plot(*zip(B, C, D), color='r', linestyle=' ', marker='o')
-
+        vector_origin = B
+        ax.quiver(vector_origin[0], vector_origin[1], vector_origin[2], normal_vector[0], normal_vector[1], normal_vector[2])
         # adjust the view so we can see the point/plane alignment
-        ax.view_init(0, 22)
+        ax.view_init(10, 20)
         plt.tight_layout()
-        plt.savefig('images/plane.png')
-        plt.show()
-        """
+        #plt.savefig('images/plane.png')
+        plt.show()"""
+
 
 
 
 
 if __name__ == "__main__":
     hey = Vision()
-    while True:
-        img = cv2.imread("/Users/AlbertOlesen/Documents/Skole/Uni/P6/Project/mask829.png")
-        hey.find_center(img)
+    img = cv2.imread("mask.png",0)
+    depth = cv2.imread("depth.png")
+    #depth = image_shifter.shift_image(depth)
+    dim = (720, 1280)
+    img = cv2.resize(img, dim)
+    x, y = hey.find_center(img)
+    hey.vector_normal(x, y, img, depth)
+
+
         ###hey.capture_image()
         ###hey.detect_object()
-        input()
