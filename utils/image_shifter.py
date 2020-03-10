@@ -30,7 +30,7 @@ def batch_shift_images(image_names: List[str], shift_vector: tuple):
 
 
 class RuntimeShifter:
-    shift_vector = (0, 0)
+    shift_vector = (-15, 15)
 
     def __init__(self, shift_vector):
         self.shift_vector = shift_vector
