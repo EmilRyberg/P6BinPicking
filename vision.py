@@ -3,6 +3,7 @@
 from PIL import Image as pimg
 from PIL import ImageDraw
 import cv2
+import glob
 import imutils 
 import numpy as np
 import scipy.misc
@@ -11,6 +12,7 @@ import os
 ###from orientation_detector import OrientationDetector
 from class_converter import convert_to_part_id
 from utils import image_shifter
+from aruco import Calibration
 
 
 ###YOLOCFGPATH = '/DarkNet/'
@@ -23,12 +25,14 @@ class Vision:
         self.current_directory = os.getcwd()
         ###yolo_cfg_path_absolute = self.current_directory + YOLOCFGPATH
         self.image_path = self.current_directory + "/" + IMAGE_NAME
+        self.mask_path = self.current_directory + "/masks/"
         ###self.detector = Detector(yolo_cfg_path_absolute + 'cfg/obj.data', yolo_cfg_path_absolute + 'cfg/yolov3-tiny.cfg', yolo_cfg_path_absolute + 'yolov3-tiny_final.weights')
         self.counter = 0
         self.first_run = True
         self.results = None
         ###self.orientationCNN = OrientationDetector(ORIENTATION_MODEL_PATH)
         self.shifter = image_shifter.RuntimeShifter
+        self.calibrate = Calibration()
 
     #def __del__(self):
         # Stop streaming
@@ -125,7 +129,7 @@ class Vision:
     def get_image_path(self):
         return self.image_path
 
-    def find_center(self, mask):
+    def find_contour(self, mask):
         kernel = np.ones((10,10),np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -135,6 +139,9 @@ class Vision:
         cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
+        return cnts
+
+    def find_center(self, cnts):
         for c in cnts:
             # compute the center of the contour
             M = cv2.moments(c)
@@ -203,20 +210,46 @@ class Vision:
         #plt.savefig('images/plane.png')
         plt.show()"""
 
+    def find_part_for_grasp(self):
+        masks = glob.glob(self.mask_path + "*")
+        number_of_masks = len(masks)
+        print(f"There are {number_of_masks} masks")
+        contour_sizes = []
+        for index, file_path in enumerate(masks):
+            mask = pimg.open(file_path)
+            mask = np.array(mask)
+            print(f"Finding contours on image {index + 1}/{number_of_masks}")
+            contours = self.find_contour(mask)
+            for c in contours:
+                area = cv2.contourArea(c)
+                if area < 5000:
+                    continue
+                else:
+                    contour_sizes.append(area)
 
-
-
+        print(contour_sizes)
+        part_to_grasp = contour_sizes.index(max(contour_sizes))
+        print(part_to_grasp)
+        return part_to_grasp
 
 if __name__ == "__main__":
     hey = Vision()
-    img = cv2.imread("mask.png",0)
+    masks = glob.glob(hey.mask_path + "*")
+    part_to_grasp = hey.find_part_for_grasp()
+    mask = pimg.open(masks[part_to_grasp])
+    mask = np.array(mask)
+    color_image = cv2.imread("color1582023984.5763314-0.png")
+
     depth = cv2.imread("depth.png")
     #depth = image_shifter.shift_image(depth)
     dim = (720, 1280)
-    img = cv2.resize(img, dim)
-    x, y = hey.find_center(img)
-    hey.vector_normal(x, y, img, depth)
+    mask = cv2.resize(mask, dim)
+    mask_contours = hey.find_contour(mask)
+    x, y = hey.find_center(mask_contours)
+    z = hey.get_z(x, y, depth)
+    print(x, y, z)
+    x, y, z = hey.calibrate.calibrate(color_image, x, y, z)
+    print(x, y, z)
+    #hey.vector_normal(x, y, img, depth)
 
 
-        ###hey.capture_image()
-        ###hey.detect_object()
