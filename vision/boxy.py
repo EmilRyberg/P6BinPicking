@@ -10,18 +10,14 @@ class Boxy:
         self.lower_thresh = self.mean - self.std
         self.upper_thresh = self.mean + self.std
 
-    def find_box(self, image_name):
+    def find_box(self, image_name, debug=False, save_video=False):
         img = cv2.imread(image_name, cv2.IMREAD_COLOR)
         img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         lower_thresh = (int(self.lower_thresh[0]), int(self.lower_thresh[1]), int(self.lower_thresh[2]))
         upper_thresh = (int(self.upper_thresh[0]), int(self.upper_thresh[1]), int(self.upper_thresh[2]))
-        #print(lower_thresh)
-        #print(upper_thresh)
-        #13.46, 127.5, 127.5
-        #
         img_thresholded = cv2.inRange(img_hsv, lower_thresh, upper_thresh)
-       # img_thresholded = cv2.cvtColor(img_thresholded_hsv, cv2.COLOR_HSV2BGR)
-        cv2.imshow("thresholded", img_thresholded)
+        if debug and not save_video:
+            cv2.imshow("thresholded", img_thresholded)
         dilate_kernel = np.ones((3, 3), np.uint8)
         kernel = np.ones((3, 3), np.uint8)
         kernel2 = np.ones((5, 5), np.uint8)
@@ -30,36 +26,33 @@ class Boxy:
         img_morph = cv2.morphologyEx(img_morph, cv2.MORPH_CLOSE, kernel)
         img_morph = cv2.morphologyEx(img_morph, cv2.MORPH_CLOSE, kernel2)
         img_morph = cv2.morphologyEx(img_morph, cv2.MORPH_OPEN, kernel2)
-        cv2.imshow("morph", img_morph)
+
+        if debug and not save_video:
+            cv2.imshow("morph", img_morph)
 
         lines = cv2.HoughLines(img_morph, 1, np.pi/180, 320)
-        #print(lines)
-        lines_xy = []
-        img_lines = img.copy()
-        for line in lines:
-            rho, theta = line[0]
-            a = np.cos(theta)
-            b = np.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            x1 = int(x0 + 2000 * (-b))
-            y1 = int(y0 + 2000 * a)
-            x2 = int(x0 - 2000 * (-b))
-            y2 = int(y0 - 2000 * a)
-            lines_xy.append([x1, y1, x2, y2])
+        img_lines = None
+        if debug:
+            img_lines = img.copy()
+            for line in lines:
+                rho, theta = line[0]
+                a = np.cos(theta)
+                b = np.sin(theta)
+                x0 = a * rho
+                y0 = b * rho
+                x1 = int(x0 + 2000 * (-b))
+                y1 = int(y0 + 2000 * a)
+                x2 = int(x0 - 2000 * (-b))
+                y2 = int(y0 - 2000 * a)
+                cv2.line(img_lines, (x1, y1), (x2, y2), (0, 0, 255), 2)
 
-            cv2.line(img_lines, (x1, y1), (x2, y2), (0, 0, 255), 2)
-        cv2.imshow("lines", img_lines)
+            if not save_video:
+                cv2.imshow("lines", img_lines)
 
         #find intersections
         intersections = []
         for index, line in enumerate(lines):
             rho, theta = line[0]
-            a = np.cos(theta)
-            b = np.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            #rho = x cos(theta) + y sin(theta)
             other_lines = [x for i, x in enumerate(lines) if i != index]
             for other_line in other_lines:
                 rho_other, theta_other = other_line[0]
@@ -73,20 +66,19 @@ class Boxy:
                     continue
                     #print("WARNING: LinAlgError")
 
-
-        #print(f"intersections: {len(intersections)}")
         intersections = [inter for inter in intersections if inter[0] >= 0 and inter[1] >= 0 and inter[0] < img.shape[1] and inter[1] < img.shape[0]]
-        #print(f"intersections after: {len(intersections)}")
 
-        img_intersections = img.copy()
-        for intersection in intersections:
-            x = int(round(intersection[0]))
-            y = int(round(intersection[1]))
-            cv2.circle(img_intersections, (x, y), 2, (255, 0, 0), -1)
+        img_intersections = None
+        if debug:
+            img_intersections = img.copy()
+            for intersection in intersections:
+                x = int(round(intersection[0]))
+                y = int(round(intersection[1]))
+                cv2.circle(img_intersections, (x, y), 2, (255, 0, 0), -1)
 
         grouped_intersections = self.group_points(intersections, 150)
 
-        print(f"groups: {len(grouped_intersections)}")
+        print(f"groups amount: {len(grouped_intersections)}")
 
         for group in grouped_intersections:
             center = np.mean(np.array(group), axis=0)
@@ -97,9 +89,11 @@ class Boxy:
                 dist = math.sqrt((point[0] - center[0])**2 + (point[1] - center[1])**2)
                 if dist > max_dist:
                     max_dist = dist
-            cv2.circle(img_intersections, (center[0], center[1]), int(max_dist) + 10, (0, 255, 0), 1)
+            if debug:
+                cv2.circle(img_intersections, (center[0], center[1]), int(max_dist) + 10, (0, 255, 0), 1)
 
-        cv2.imshow("points", img_intersections)
+        if debug and not save_video:
+            cv2.imshow("points", img_intersections)
 
         anchor_points = []
         for group in grouped_intersections:
@@ -109,29 +103,42 @@ class Boxy:
                 if group_center[0] < 0 or group_center[0] > img.shape[1] or group_center[1] < 0 or group_center[1] > img.shape[0]:
                     continue
                 anchor_points.append((int(group_center[0]), int(group_center[1])))
+        img_anchor = None
+        if debug:
+            img_anchor = img.copy()
+            for point in anchor_points:
+                cv2.circle(img_anchor, point, 2, (255, 0, 0), -1)
 
-        anchor_img = img.copy()
-        for point in anchor_points:
-            cv2.circle(anchor_img, point, 2, (255, 0, 0), -1)
-        cv2.imshow("anchor points", anchor_img)
+            if not save_video:
+                cv2.imshow("anchor points", img_anchor)
+
         area_threshold = 200000
         rectangles = []
-        print("starting rects")
-        start_index = 0
-        #intersections_int = [[100, 100], [500, 100], [500, 500], [123, 123], [123, 123]]
         max_area = 0
-        for index, point in enumerate(anchor_points):#[0:int(round(len(intersections)/2))]
-            print("outer loop index:", index)
+        box_images = []
+        img_with_boxes = img_anchor.copy()
+        total_index = 0
+        saved_boxes = 0
+        print(f"anchor points: {len(anchor_points)}")
+        for index, point in enumerate(anchor_points):
             other_points = [p for i, p in enumerate(anchor_points) if i != index]
+            checked_lines = []
             for index2, point2 in enumerate(other_points):
-                #print(f"inner loop 1 index {group_index2} out of {len(other_groups)}")
                 line_vector = [point2[0] - point[0], point2[1] - point[1]]
                 last_points = [p for i, p in enumerate(other_points) if i != index2]
                 for index3, point3 in enumerate(last_points):
+                    total_index += 1
                     other_line_vector = [point3[0] - point2[0], point3[1] - point2[1]]
-                    #print(f"line vectors: {line_vector} - {other_line_vector}")
+                    #is_saving_img = False
+                    if debug and save_video and index2 % 10 == 0 and index3 % 10 == 0:
+                        #is_saving_img = True
+                        #print(f"Saving image for point {total_index}/{len(anchor_points)*len(other_points)*len(last_points)}")
+                        #cur_img = img_with_boxes.copy()
+                        checked_lines.append([(point[0], point[1]), (point2[0], point2[1]), (point2[0], point2[1]), (point3[0], point3[1])])
+                        #cv2.line(cur_img, (point[0], point[1]), (point2[0], point2[1]), (0, 0, 0), 1)
+                        #cv2.line(cur_img, (point2[0], point2[1]), (point3[0], point3[1]), (0, 0, 0), 1)
+                        #box_images.append(cur_img)
                     dot = line_vector[0] * other_line_vector[0] + line_vector[1] * other_line_vector[1]
-                    #print("dot", dot)
                     if -500 < dot < 500:
                         r = (point[0] - point2[0], point[1] - point2[1])
                         x4 = point3[0] + r[0]
@@ -145,17 +152,33 @@ class Boxy:
                             max_area = area
                         if area >= area_threshold:
                             rectangles.append([(point[0], point[1]), (point2[0], point2[1]), (point3[0], point3[1]), (x4, y4)])
+                            if debug and save_video and saved_boxes % 10 == 0:
+                                img_with_box = img_with_boxes.copy()
+                                for i in range(0, len(checked_lines), 4):
+                                    checked_line = checked_lines[i]
+                                    cur_img = img_with_boxes.copy()
+                                    cv2.line(cur_img, checked_line[0], checked_line[1], (0, 0, 0), 1)
+                                    cv2.line(cur_img, checked_line[2], checked_line[3], (0, 0, 0), 1)
+                                    box_images.append(cur_img)
+                                cv2.line(img_with_box, (point[0], point[1]), (point2[0], point2[1]), (0, 0, 255), 2)
+                                cv2.line(img_with_box, (point2[0], point2[1]), (point3[0], point3[1]), (0, 0, 255), 2)
+                                cv2.line(img_with_box, (point3[0], point3[1]), (x4, y4), (0, 0, 255), 2)
+                                cv2.line(img_with_box, (x4, y4), (point[0], point[1]), (0, 0, 255), 2)
+                                cv2.line(img_with_boxes, (point[0], point[1]), (point2[0], point2[1]), (0, 0, 255), 2)
+                                cv2.line(img_with_boxes, (point2[0], point2[1]), (point3[0], point3[1]), (0, 0, 255), 2)
+                                cv2.line(img_with_boxes, (point3[0], point3[1]), (x4, y4), (0, 0, 255), 2)
+                                cv2.line(img_with_boxes, (x4, y4), (point[0], point[1]), (0, 0, 255), 2)
+                                box_images.append(img_with_box)
+                            saved_boxes += 1
         print("max area", max_area)
         best_rectangles = []
         best_rectangle = None
-        biggest_area = 0
         max_score = -10000
         for rect in rectangles:
             r1 = (rect[1][0] - rect[0][0], rect[1][1] - rect[0][1])
             r2 = (rect[2][0] - rect[1][0], rect[2][1] - rect[1][1])
             length1 = math.sqrt(r1[0] ** 2 + r1[1] ** 2)
             length2 = math.sqrt(r2[0] ** 2 + r2[1] ** 2)
-            aspect_ratio = 0
             if length1 > length2:
                 aspect_ratio = length1 / length2
             else:
@@ -166,33 +189,64 @@ class Boxy:
                 if score > max_score:
                     max_score = score
                     best_rectangle = rect
+
         print(f"best rectangles count: {len(best_rectangles)}")
-        #img_rects = img.copy()
+
         image_rects = []
-        cv2.namedWindow("rect_image")
-        for index, rect in enumerate(best_rectangles):
-            print(f"index: {index} - rect: {rect}")
-            img_rect = img.copy()
-            cv2.line(img_rect, rect[0], rect[1], (255, 0, 0))
-            cv2.line(img_rect, rect[1], rect[2], (255, 0, 0))
-            cv2.line(img_rect, rect[2], rect[3], (255, 0, 0))
-            cv2.line(img_rect, rect[3], rect[0], (255, 0, 0))
-            print("SCORE: " + str(self.score_rect(img_hsv, rect)))
-            image_rects.append(img_rect)
-            #break
-
-        def trackBarChange(val):
+        if debug and not save_video:
+            cv2.namedWindow("rect_image")
+        def track_bar_change(val):
             cv2.imshow("rect_image", image_rects[val])
-        cv2.createTrackbar("rectimg", "rect_image", 0, len(image_rects)-1, trackBarChange)
-        cv2.imshow("rect_image", image_rects[0])
-        img_best_rect = img.copy()
-        cv2.line(img_best_rect, best_rectangle[0], best_rectangle[1], (0, 0, 255), 2)
-        cv2.line(img_best_rect, best_rectangle[1], best_rectangle[2], (0, 0, 255), 2)
-        cv2.line(img_best_rect, best_rectangle[2], best_rectangle[3], (0, 0, 255), 2)
-        cv2.line(img_best_rect, best_rectangle[3], best_rectangle[0], (0, 0, 255), 2)
-        cv2.imshow("best rect", img_best_rect)
 
-        cv2.waitKey(0)
+        img_best_boxes = img.copy()
+        if debug:
+            for index, rect in enumerate(best_rectangles):
+                img_rect = img.copy() if not save_video else img_best_boxes
+                cv2.line(img_rect, rect[0], rect[1], (255, 0, 0))
+                cv2.line(img_rect, rect[1], rect[2], (255, 0, 0))
+                cv2.line(img_rect, rect[2], rect[3], (255, 0, 0))
+                cv2.line(img_rect, rect[3], rect[0], (255, 0, 0))
+
+                if not save_video:
+                    print("SCORE: " + str(self.score_rect(img_hsv, rect)))
+                    image_rects.append(img_rect)
+                    cv2.createTrackbar("rectimg", "rect_image", 0, len(image_rects) - 1, track_bar_change)
+                    cv2.imshow("rect_image", image_rects[0])
+
+        if debug:
+            img_best_rect = img.copy()
+            cv2.line(img_best_rect, best_rectangle[0], best_rectangle[1], (0, 0, 255), 2)
+            cv2.line(img_best_rect, best_rectangle[1], best_rectangle[2], (0, 0, 255), 2)
+            cv2.line(img_best_rect, best_rectangle[2], best_rectangle[3], (0, 0, 255), 2)
+            cv2.line(img_best_rect, best_rectangle[3], best_rectangle[0], (0, 0, 255), 2)
+
+            if not save_video:
+                cv2.imshow("best rect", img_best_rect)
+                cv2.waitKey(0)
+            else:
+                writer = cv2.VideoWriter('test.avi', cv2.VideoWriter_fourcc(*'DIVX'), 15, (img.shape[1], img.shape[0]))
+                for i in range(30):
+                    writer.write(img)
+                img_thresholded_rgb = cv2.cvtColor(img_thresholded, cv2.COLOR_GRAY2BGR)
+                for i in range(20):
+                    writer.write(img_thresholded_rgb)
+                img_morph_rgb = cv2.cvtColor(img_morph, cv2.COLOR_GRAY2BGR)
+                for i in range(20):
+                    writer.write(img_morph_rgb)
+                for i in range(20):
+                    writer.write(img_lines)
+                for i in range(20):
+                    writer.write(img_intersections)
+                for i in range(20):
+                    writer.write(img_anchor)
+                for box_img in box_images:
+                    writer.write(box_img)
+                for i in range(45):
+                    writer.write(img_best_boxes)
+                for i in range(75):
+                    writer.write(img_best_rect)
+                writer.release()
+
         return best_rectangle
 
 
@@ -269,5 +323,5 @@ class Boxy:
 
 if __name__ == "__main__":
     boxy = Boxy()
-    boxy.find_box("color1582020110.6481073-0.png")
+    boxy.find_box("color1582019554.5333703-0.png", debug=True, save_video=True)
     #boxy.get_average_pixel_value("color1582019554.5333703-0.png")
