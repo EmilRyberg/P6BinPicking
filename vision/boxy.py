@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import math
-
+import time
 
 class Boxy:
     def __init__(self):
@@ -10,8 +10,7 @@ class Boxy:
         self.lower_thresh = self.mean - self.std
         self.upper_thresh = self.mean + self.std
 
-    def find_box(self, image_name, debug=False):
-        img = cv2.imread(image_name, cv2.IMREAD_COLOR)
+    def find_box(self, img, debug=False):
         img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         lower_thresh = (int(self.lower_thresh[0]), int(self.lower_thresh[1]), int(self.lower_thresh[2]))
         upper_thresh = (int(self.upper_thresh[0]), int(self.upper_thresh[1]), int(self.upper_thresh[2]))
@@ -168,5 +167,10 @@ class Boxy:
 
 if __name__ == "__main__":
     boxy = Boxy()
-    boxy.find_box("color1582019554.5333703-0.png", debug=True)
+    img = cv2.imread("color1582020127.007188-0.png", cv2.IMREAD_COLOR)
+    start = time.time()
+    result = boxy.find_box(img)
+    stop = time.time()
+    diff = stop - start
+    print(f"Result {result} tooks {diff*1000}ms")
     #boxy.get_average_pixel_value("color1582019554.5333703-0.png")
