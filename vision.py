@@ -163,16 +163,46 @@ class Vision:
         print(z)
         return z
 
-    def vector_normal(self, x, y, mask, depthimage):
+    def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
+        mask_contour = 0
+        for c in mask_contours:
+            area = cv2.contourArea(c)
+            if area < 5000:
+                continue
+            else:
+                mask_contour = c
+        print(centre_x, centre_y)
+        print(mask_contour)
+        max_x = 0
+        max_y = 0
+        for i in range(len(mask_contour)):
+            if mask_contour[i][0][0]>max_x:
+                max_x = mask_contour[i][0][0]
+            if mask_contour[i][0][1]>max_y:
+                max_y = mask_contour[i][0][1]
+
+        x_offset = int((max_x - centre_x) / 2)
+        y_offset = int((max_y - centre_y) / 2)
+
+        if point_number == 1:
+            return centre_x + x_offset, centre_y
+        elif point_number == 2:
+            return centre_x, centre_y + y_offset
+        else:
+            print("Invalid point number specified")
+            exit(-1)
+
+    def vector_normal(self, x, y, mask_contours, depthimage):
         A = np.array([x, y, self.get_z(x, y, depthimage)])
-        B = np.array([x-10, y-10, self.get_z(x-10, y-10, depthimage)])
-        C = np.array([x+10, y-10, self.get_z(x+10, y-10, depthimage)])
-        D = np.array([x-10, y+10, self.get_z(x-10, y+10, depthimage)])
+        Bx, By = self.find_point_in_mask(x, y, mask_contours, 1)
+        B = np.array([Bx, By, self.get_z(Bx, By, depthimage)])
+        Cx, Cy = self.find_point_in_mask(x, y, mask_contours, 2)
+        C = np.array([Cx, Cy, self.get_z(Cx, Cy, depthimage)])
 
-
-        vector1 = D-B
-        vector2 = C-B
+        vector2 = C-A
+        vector1 = B-A
         normal_vector = np.cross(vector1, vector2)
+
         print(normal_vector)
         """
         #DEBUG CODE FOR VISUALISATION
@@ -246,10 +276,8 @@ if __name__ == "__main__":
     mask = cv2.resize(mask, dim)
     mask_contours = hey.find_contour(mask)
     x, y = hey.find_center(mask_contours)
-    z = hey.get_z(x, y, depth)
-    print(x, y, z)
-    x, y, z = hey.calibrate.calibrate(color_image, x, y, z)
-    print(x, y, z)
-    #hey.vector_normal(x, y, img, depth)
+    #x, y, z = hey.calibrate.calibrate(color_image, x, y, z)
+    #print(x, y, z)
+    hey.vector_normal(x, y, mask_contours, depth)
 
 
