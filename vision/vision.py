@@ -68,38 +68,6 @@ class Vision:
         ###color_image_ready_to_save.save(self.image_path)
         ###return color_image
 
-    def find_parts(self, class_id, fuse_index=-1):
-        class_id1, class_id2 = class_id
-        part = (-1, -1, -1, -1, -1)
-        # result is an array of dictionaries
-        found_class_index = 0
-        for i in range(len(self.results)):
-            d = self.results[i]
-            if (d['class'] == class_id1 or d['class'] == class_id2) and d['prob'] > 0.6:
-                if fuse_index > -1 and fuse_index != found_class_index:
-                    found_class_index += 1
-                    continue
-                part_class = d['class']
-                prob = d['prob']
-                width = d['right'] - d['left']
-                height = d['bottom'] - d['top']
-                x_coord = width / 2 + d['left']
-                y_coord = height / 2 + d['top']
-                if height > width:
-                    orientation = OrientationEnum.VERTICAL.value
-                    grip_width = width * 0.58
-                elif width > height:
-                    orientation = OrientationEnum.HORIZONTAL.value
-                    grip_width = height * 0.58
-                else:
-                    orientation = OrientationEnum.HORIZONTAL.value
-                    grip_width = height * 0.58
-                    print("[W] Could not determine orientation, using 1 as default")
-                new_part_id = convert_to_part_id(part_class)
-                part = (new_part_id, x_coord, y_coord, orientation, grip_width)
-                break
-        print(part)
-        return part
 
     ###def detect_object(self):
         ###self.results = self.detector.detect(self.image_path)
