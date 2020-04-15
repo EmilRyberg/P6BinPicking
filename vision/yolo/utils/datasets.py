@@ -42,7 +42,7 @@ class ImageFolder(Dataset):
         self.img_size = img_size
 
     def __getitem__(self, index):
-        img_path = os.path.join(os.getcwd(), 'data/coco/', self.files[index % len(self.files)].replace('/', '', 1))
+        img_path = os.path.join(os.getcwd(), self.files[index % len(self.files)].replace('/', '', 1))
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(Image.open(img_path))
         # Pad to square resolution
@@ -80,7 +80,7 @@ class ListDataset(Dataset):
         #  Image
         # ---------
 
-        img_path = os.path.join(os.getcwd(), 'data/coco/', self.img_files[index % len(self.img_files)].rstrip().replace('/', '', 1))
+        img_path = os.path.join(os.getcwd(), self.img_files[index % len(self.img_files)].rstrip().replace('/', '', 1))
 
         # Extract image as PyTorch tensor
         img = transforms.ToTensor()(Image.open(img_path).convert('RGB'))
@@ -100,7 +100,7 @@ class ListDataset(Dataset):
         #  Label
         # ---------
 
-        label_path = os.path.join(os.getcwd(), 'data/coco/', self.label_files[index % len(self.img_files)].rstrip().replace('/', '', 1))
+        label_path = os.path.join(os.getcwd(), self.label_files[index % len(self.img_files)].rstrip().replace('/', '', 1))
         targets = None
         if os.path.exists(label_path):
             boxes = torch.from_numpy(np.loadtxt(label_path).reshape(-1, 5))
