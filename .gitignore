@@ -133,3 +133,9 @@ dmypy.json
 *.png
 
 *.weights
+
+utils/dataset/**/*
+utils/dataset_splitted/**/*
+vision/yolo/config/*
+vision/yolo/data/**/*
+vision/*.avi
