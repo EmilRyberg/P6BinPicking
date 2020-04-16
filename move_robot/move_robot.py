@@ -167,11 +167,14 @@ class MoveRobot:
         if width < 5:
             self.move_gripper(width)
 
-    def close_gripper(self):
-        msg = "grip(40,0)\n"
+    def close_gripper(self, width=0):
+        msg = "grip(40," + str(width) + "\n"
         msg = msg.encode()
         self.gripper.send(msg)
         time.sleep(2)
+        #TODO get feedback from gripper
+        success = True
+        return success
 
     def move_gripper(self, position):
         msg = "move({})\n".format(position)
