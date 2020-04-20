@@ -139,3 +139,6 @@ utils/dataset_splitted/**/*
 vision/yolo/config/*
 vision/yolo/data/**/*
 vision/*.avi
+*.jpg
+*.pth
+*.hdf5
