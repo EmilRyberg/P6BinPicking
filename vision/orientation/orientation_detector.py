@@ -23,11 +23,8 @@ class OrientationDetectorNet(nn.Module):
             nn.Linear(in_features=256, out_features=1, bias=True),
             nn.Sigmoid()
         )
-        #print("vvg16:", self.model)
 
     def forward(self, x):
-        #print("bias: ", list(self.model.features.children())[0].bias)
-        #print(list(self.model.features.children())[0].weight)
         x = self.model.features(x)
         x = x.view(-1, x.shape[1] * x.shape[2] * x.shape[3])
         x = self.model.classifier(x)
@@ -75,15 +72,12 @@ class OrientationDetectorNet(nn.Module):
                         else:
                             valid_layer = True
 
-            #print(f"weight: {weight}, model: {layer}")
+            #  print(f"weight: {weight}, model: {layer}")
             if type(layer) is Conv2d:
                 key = list(file[weight.name].keys())[0]
                 weight_block = file[f"{weight.name}/{key}"]
-                #print(weight_block["bias:0"].shape)
-                # print(weight_block["kernel:0"].shape)
                 bias = torch.from_numpy(np.array(weight_block["bias:0"]))
                 weight_tensor = torch.from_numpy(np.array(weight_block["kernel:0"])).permute(3, 2, 0, 1)
-                #print(weight_tensor.shape)
                 layer.bias.detach().copy_(bias)
                 layer.weight.detach().copy_(weight_tensor)
             elif type(layer) is Linear:
@@ -91,9 +85,6 @@ class OrientationDetectorNet(nn.Module):
                 weight_block = file[f"{weight.name}/{key}"]
                 bias = torch.from_numpy(np.array(weight_block["bias:0"]))
                 weight_tensor = torch.from_numpy(np.array(weight_block["kernel:0"])).t()
-                #print(f"{layer.bias.shape} vs {bias.shape}")
-                #print(f"{layer.weight.shape} vs {weight_tensor.shape}")
-                #print(weight_tensor.shape)
                 layer.bias.detach().copy_(bias)
                 layer.weight.detach().copy_(weight_tensor)
 
