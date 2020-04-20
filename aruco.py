@@ -1,4 +1,4 @@
-import pyrealsense2 as rs
+#import pyrealsense2 as rs
 from PIL import Image as pimg
 import numpy as np
 import cv2.aruco as aruco
@@ -26,8 +26,8 @@ class Calibration:
         default_distortion = np.array([0, 0, 0, 0, 0], dtype=np.float32)
         self.distortion = default_distortion.T
 
-    def calibrate(self, np_image, x_coordinate, y_coordinate):
-        assert(x_coordinate > 0 and y_coordinate > 0, "[FATAL] aruco calibrate got invalid x or y")
+    def calibrate(self, np_image, x_coordinate, y_coordinate, world_z):
+        assert x_coordinate > 0 and y_coordinate > 0 and world_z >= 0, "[FATAL] aruco calibrate got invalid x, y or z"
         timer = time.time()
 
         # RGB to BGR, then grayscale
@@ -70,12 +70,18 @@ class Calibration:
             world_coordinates = r_matrix_inverse.dot(xyz_c)
             index += 1
             if index > 1000:
-                raise Exception("scaling factor finding is taking longer than 1000 iterations")
-            if world_coordinates[2][0] > 0.5:
+                raise Exception("aruco.py: scaling factor finding is taking longer than 1000 iterations")
+            if world_coordinates[2][0] > world_z + 0.5:
                 scaling_factor += 1
-            elif world_coordinates[2][0] < -0.5:
+            elif world_coordinates[2][0] < world_z - 0.5:
                 scaling_factor -= 1
             else:
                 break
         print("[INFO] Calibration took %.2f seconds" % (time.time() - timer))
         return world_coordinates[0][0], world_coordinates[1][0], world_coordinates[2][0]
+
+if __name__ == "__main__":
+    c = Calibration()
+    pilimg = pimg.open("test.png")
+    npimg = np.asarray(pilimg)
+    print(c.calibrate(npimg, 960, 540, 200))
