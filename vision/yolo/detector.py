@@ -39,5 +39,4 @@ class Detector:
         detections = detections[0]
         detections = rescale_boxes(detections, self.img_size, np_img.shape[:2])
         detections = detections.cpu()
-        print("detections: ", np.array(detections))
         return np.array(detections)
