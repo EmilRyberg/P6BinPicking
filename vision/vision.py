@@ -127,7 +127,10 @@ class Vision:
         resized_image_np = np.array(resized_image) / 255
         image_tensor = torch.from_numpy(resized_image_np).permute(2, 0, 1).float()
         image_tensor = image_tensor.unsqueeze(0)
-        result = self.orientationCNN(image_tensor)[0][0] >= 0.5
+        self.orientationCNN.eval()
+        with torch.no_grad():
+            prediction = self.orientationCNN(image_tensor)
+        result = prediction[0][0] >= 0.5
         print("[INFO] Part is facing right. {}".format(result))
         return result
 
