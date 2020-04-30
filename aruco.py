@@ -33,7 +33,8 @@ class Calibration:
         # RGB to BGR, then grayscale
         opencv_image = np_image[:, :, ::-1].copy()
         opencv_image_gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
-
+        #cv2.imshow("a", opencv_image_gray)
+        #cv2.waitKey()
         (corners, detected_ids, rejected_image_points) = aruco.detectMarkers(opencv_image_gray, self.aruco_dict)
         corners = np.array(corners).reshape((len(detected_ids), 4, 2)) #opencv stupid
         detected_ids = np.array(detected_ids).reshape((len(detected_ids))) #opencv stupid
@@ -78,7 +79,7 @@ class Calibration:
             else:
                 break
         print("[INFO] Calibration took %.2f seconds" % (time.time() - timer))
-        return world_coordinates[0][0], world_coordinates[1][0], world_coordinates[2][0]
+        return np.array([world_coordinates[0][0], world_coordinates[1][0], world_coordinates[2][0]])
 
 if __name__ == "__main__":
     c = Calibration()
