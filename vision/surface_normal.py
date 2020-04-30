@@ -41,7 +41,7 @@ class SurfaceNormals:
 
     def get_z(self, x, y, depth_image):
         #TODO make finidng camera offset automatic
-        z = 1000 - depth_image[y, x, 0] * 10 #get value in mm
+        z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image):
@@ -62,9 +62,10 @@ class SurfaceNormals:
 
         vector2 = C-A
         vector1 = B-A
-        normal_vector = np.cross(vector1, vector2) *-1
+        normal_vector = np.cross(vector2, vector1)
 
         print(normal_vector)
+        return normal_vector
         """
         #DEBUG CODE FOR VISUALISATION
         a, b, c = normal_vector
@@ -102,15 +103,15 @@ class SurfaceNormals:
         plt.show()"""
 
     def find_contour(self, np_mask):
-        mask = np_mask[:, :, ::-1].copy()
-        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        mask = np_mask.copy()
+        #mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         kernel = np.ones((10, 10), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
         #cv2.imshow("MORPH", mask)
         #cv2.waitKey(0)
 
-        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+        cnts = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         return cnts
