@@ -1,5 +1,5 @@
 from vision.yolo.detector import Detector
-import pyrealsense2 as rs
+#import pyrealsense2 as rs
 from PIL import Image as pimg
 from PIL import ImageDraw
 import cv2
@@ -7,41 +7,45 @@ import glob
 import imutils
 import numpy as np
 import scipy.misc
-from controller.enums import PartEnum, OrientationEnum
+#from controller.enums import PartEnum, OrientationEnum
 import os
 from vision.orientation.orientation_detector import OrientationDetectorNet
-from controller.class_converter import convert_to_part_id, convert_from_part_id
-from utils import image_shifter
+#from controller.class_converter import convert_to_part_id, convert_from_part_id
+#from utils import image_shifter
 from aruco import Calibration
 import torch
-
+from vision.segmentation.detector import InstanceDetector
+import torch.utils.model_zoo
 import os
 
 YOLOCFGPATH = 'vision/yolo/'
 IMAGE_NAME = "webcam_capture.png"
 ORIENTATION_MODEL_PATH = "orientation_cnn.pth"
 
+
 class Vision:
     def __init__(self):
-        self.rs_pipeline = rs.pipeline()
+        #self.rs_pipeline = rs.pipeline()
         self.current_directory = os.getcwd()
         yolo_cfg_path_absolute = self.current_directory + YOLOCFGPATH
         self.image_path = self.current_directory + "/" + IMAGE_NAME
         self.mask_path = self.current_directory + "/masks/"
-        self.detector = Detector(os.path.join(yolo_cfg_path_absolute, 'cfg/obj.data'),
+        """self.detector = Detector(os.path.join(yolo_cfg_path_absolute, 'cfg/obj.data'),
                                  os.path.join(yolo_cfg_path_absolute, 'cfg/yolov3-tiny.cfg'),
-                                 os.path.join(yolo_cfg_path_absolute, 'yolov3-tiny_final.weights'))
+                                 os.path.join(yolo_cfg_path_absolute, 'yolov3-tiny_final.weights'))"""
         self.counter = 0
         self.first_run = True
         self.results = None
         self.orientationCNN = OrientationDetectorNet()
-        self.orientationCNN.load_state_dict(torch.load(ORIENTATION_MODEL_PATH))
-        self.shifter = image_shifter.RuntimeShifter
+        #self.orientationCNN.load_state_dict(torch.load(ORIENTATION_MODEL_PATH))
+        #self.shifter = image_shifter.RuntimeShifter
         self.calibrate = Calibration()
+        self.segmentation_detector = InstanceDetector('vision/model_final_0-002LR.pth')
 
     def __del__(self):
         # Stop streaming
-        self.rs_pipeline.stop()
+        #self.rs_pipeline.stop()
+        pass
 
     def capture_image(self):
         if self.first_run:
@@ -103,6 +107,25 @@ class Vision:
         print(part)
         return part
 
+    def segment(self, np_img):
+        bgr_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
+        results = self.segmentation_detector.predict(bgr_img)
+        classes = ["PCB", "BottomCover", "BlueCover", "WhiteCover", "BlackCover"]
+        masks = []
+        for i in range(len(results["instances"].pred_classes)):
+            mask_image = results["instances"].pred_masks[i].cpu().numpy()
+            mask_image = np.asarray(mask_image * 255, dtype=np.uint8)
+            moments = cv2.moments(mask_image)
+            cX = int(moments["m10"] / moments["m00"])
+            cY = int(moments["m01"] / moments["m00"])
+            center = (cX, cY)
+            area = moments["m00"]
+            part = classes[results['instances'].pred_classes[i]]
+            score = results['instances'].scores[i]
+            mask = {"part": part, "score": score, "area": area, "center": center, "ignored": False, "ignore_reason": "", "mask": mask_image}
+            masks.append(mask)
+        return masks
+
     def detect_object(self):
         np_img = pimg.open(self.image_path)
         self.results = self.detector.predict(np_img)
@@ -136,41 +159,6 @@ class Vision:
 
     def get_image_path(self):
         return self.image_path
-
-    def find_contour(self, mask):
-        kernel = np.ones((10,10),np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        #cv2.imshow("MORPH", mask)
-        #cv2.waitKey(0)
-
-        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
-                                cv2.CHAIN_APPROX_SIMPLE)
-        cnts = imutils.grab_contours(cnts)
-        return cnts
-
-    def find_center(self, cnts):
-        for c in cnts:
-            # compute the center of the contour
-            M = cv2.moments(c)
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-            # draw the contour and center of the shape on the image
-            #mask_coloured = cv2.cvtColor(mask,cv2.COLOR_GRAY2RGB)
-            #cv2.drawContours(mask_coloured, [c], -1, (0, 255, 0), 2)
-            #cv2.circle(mask_coloured, (cX, cY), 7, (255, 0, 255), -1)
-            #cv2.putText(mask_coloured, "center", (cX - 20, cY - 20),
-                        #cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-            # show the image
-            #cv2.imshow("CENTER", mask_coloured)
-            #cv2.waitKey(0)
-            return cX, cY
-
-    def get_z(self, x, y, depth_image):
-        z = depth_image[x,y,0]
-        print(z)
-        return z
-
 
     def find_part_for_grasp(self):
         masks = glob.glob(self.mask_path + "*")

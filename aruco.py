@@ -78,7 +78,7 @@ class Calibration:
                 scaling_factor -= 1
             else:
                 break
-        print("[INFO] Calibration took %.2f seconds" % (time.time() - timer))
+        #print("[INFO] Calibration took %.2f seconds" % (time.time() - timer))
         return np.array([world_coordinates[0][0], world_coordinates[1][0], world_coordinates[2][0]])
 
 if __name__ == "__main__":

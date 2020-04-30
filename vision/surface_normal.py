@@ -18,7 +18,7 @@ class SurfaceNormals:
             else:
                 mask_contour = c
         assert mask_contour.any() != None, "Couldn't find large enough mask contour"
-        print(centre_x, centre_y)
+        #print(centre_x, centre_y)
         #print(mask_contour)
         max_x = 0
         max_y = 0
@@ -41,15 +41,15 @@ class SurfaceNormals:
 
     def get_z(self, x, y, depth_image):
         #TODO make finidng camera offset automatic
-        z = 1000 - depth_image[y, x, 0] * 10 #get value in mm
+        z = 1000 - depth_image[y, x] * 10 #get value in mm
         return z
 
-    def vector_normal(self, np_mask, np_depthimage, np_reference_image):
+    def vector_normal(self, cv_mask, np_depthimage, np_reference_image):
         # depth = image_shifter.shift_image(depth)
         pil_depth = pimg.fromarray(np_depthimage)
         pil_depth = pil_depth.resize((1920, 1080))
         np_depthimage = np.asarray(pil_depth)
-        mask_contours = self.find_contour(np_mask)
+        mask_contours = self.find_contour(cv_mask)
         Ax, Ay = self.find_center(mask_contours)
         Az = self.get_z(Ax, Ay, np_depthimage)
         A = self.aruco.calibrate(np_reference_image, Ax, Ay, Az)
@@ -64,7 +64,8 @@ class SurfaceNormals:
         vector1 = B-A
         normal_vector = np.cross(vector1, vector2) *-1
 
-        print(normal_vector)
+        #print(normal_vector)
+        return [A[0], A[1], A[2], normal_vector[0], normal_vector[1], normal_vector[2]] #world xyz and normal vector for now
         """
         #DEBUG CODE FOR VISUALISATION
         a, b, c = normal_vector
@@ -101,9 +102,10 @@ class SurfaceNormals:
         #plt.savefig('images/plane.png')
         plt.show()"""
 
-    def find_contour(self, np_mask):
-        mask = np_mask[:, :, ::-1].copy()
-        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+    def find_contour(self, cv_mask):
+        #mask = np_mask[:, :, ::-1].copy()
+        mask = cv_mask
+        #mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         kernel = np.ones((10, 10), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
@@ -136,5 +138,5 @@ if __name__ == "__main__":
     sn = SurfaceNormals()
     np_mask = np.array(pimg.open("bottom.png"))
     np_depth = np.asarray(pimg.open("depth.png"))
-    np_reference = np.asarray(pimg.open("ref2.png"))
+    np_reference = np.asarray(pimg.open("ref.png"))
     sn.vector_normal(np_mask, np_depth, np_reference)
