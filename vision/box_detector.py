@@ -6,8 +6,8 @@ import time
 
 class BoxDetector:
     def __init__(self):
-        self.mean = np.array([10, 130, 115], np.uint8)
-        self.std = np.array([4, 30, 40], np.uint8)
+        self.mean = np.array([23, 85, 137], np.uint8) #simulation thresholds
+        self.std = np.array([2, 5, 4], np.uint8) #simulation thresholds
         self.lower_thresh = self.mean - self.std
         self.upper_thresh = self.mean + self.std
 
@@ -86,7 +86,7 @@ class BoxDetector:
 
 if __name__ == "__main__":
     boxy = BoxDetector()
-    img = cv2.imread("color1582020127.007188-0.png", cv2.IMREAD_COLOR)
+    img = cv2.imread("sim_box.jpg", cv2.IMREAD_COLOR)
     start = time.time()
     result = boxy.find_box(img)
     stop = time.time()
