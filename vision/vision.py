@@ -2,7 +2,7 @@ from vision.yolo.detector import Detector
 #import pyrealsense2 as rs
 from PIL import Image as pimg
 from PIL import ImageDraw
-import cv2
+from cv2 import cv2
 import glob
 import imutils
 import numpy as np
@@ -181,6 +181,28 @@ class Vision:
         part_to_grasp = contour_sizes.index(max(contour_sizes))
         print(part_to_grasp)
         return part_to_grasp
+
+    def calculate_long_axis(self, image):
+        img = cv2.imread(self.image_path, 0)
+        kernel = np.ones((10,10),np.uint8)
+
+        #Getting the img ready for PCA
+        mat_morph = np.argwhere(img_morph != 0)
+        mat_morph[:, [0, 1]] = mat_morph[:, [1, 0]]
+        mat_morph = np.array(mat_morph).astype(np.float32) #have to convert type for PCA
+
+        m, e = cv2.PCACompute(mat_morph, mean = np.array([])) #computing PCA
+
+        center = tuple(m[0]) #center of object
+        endpoint = tuple(m[0] + e[0]) #end point of 
+
+        long_axis = (center[0]-endpoint[0], center[1]-endpoint[1])
+        return long_axis
+
+        #debug/test stuff
+        #cv2.circle(img_morph, center, 5, 0)
+        #cv2.line(img_morph, center, endpoint, 100)
+        #cv2.imwrite("out_morph.bmp", img_morph)
 
 
 if __name__ == "__main__":
