@@ -63,9 +63,10 @@ class SurfaceNormals:
         vector2 = C-A
         vector1 = B-A
         normal_vector = np.cross(vector2, vector1)
+        normal_vector = normal_vector / np.linalg.norm(normal_vector)
 
         print(normal_vector)
-        return normal_vector
+        return A, normal_vector
         """
         #DEBUG CODE FOR VISUALISATION
         a, b, c = normal_vector
@@ -132,6 +133,7 @@ class SurfaceNormals:
             #cv2.imshow("CENTER", mask_coloured)
             #cv2.waitKey(0)
             return cX, cY
+
 
 if __name__ == "__main__":
     sn = SurfaceNormals()
