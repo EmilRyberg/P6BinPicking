@@ -5,6 +5,7 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 
+
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
@@ -43,6 +44,27 @@ class SurfaceNormals:
         #TODO make finidng camera offset automatic
         z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
+
+    def get_tool_orientation_matrix(self, np_mask, np_depth_image, np_reference_image):
+        center, normal_vector = self.vector_normal(np_mask, np_depth_image, np_reference_image)
+        tool_direction = normal_vector * -1
+        s = np.sin(np.pi / 2)
+        c = np.cos(np.pi / 2)
+        s2 = np.sin(-np.pi / 2)
+        c2 = np.cos(-np.pi / 2)
+        Ry = np.array([[c, 0, s],
+                       [0, 1, 0],
+                       [-s, 0, c]])
+        Rz = np.array([[c2, -s2, 0],
+                       [s2, c2, 0],
+                       [0, 0, 1]])
+        x_vector = np.dot(Ry, tool_direction)
+        x_vector = x_vector / np.linalg.norm(x_vector)
+        y_vector = np.dot(Rz, x_vector)
+        y_vector = y_vector / np.linalg.norm(y_vector)
+        matrix = np.append(x_vector.reshape((3, 1)), y_vector.reshape((3, 1)), axis=1)
+        matrix = np.append(matrix, tool_direction.reshape((3, 1)), axis=1)
+        return center, matrix
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image):
         # depth = image_shifter.shift_image(depth)
