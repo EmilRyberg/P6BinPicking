@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import random
 from simulation_connector import SimulationConnector
+from camera_interface import CameraInterface
 
 NUMBER_OF_PARTS = 4
 FIXTURE_X = 255
@@ -17,11 +18,10 @@ UR_IP = "192.168.1.148"
 
 class Controller:
     def __init__(self):
-        self.np_image = None
         #self.move_robot = MoveRobot(UR_IP)
         self.move_robot = SimulationConnector(2000)
+        self.camera = CameraInterface(mode="simulation", simulation_connector_instance=self.move_robot)
         self.vision = Vision()
-        #self.aruco = Calibration()
         self.surface_normals = SurfaceNormals()
         self.detected_objects = None
         self.masks = None
@@ -35,26 +35,17 @@ class Controller:
         print("[I] Controller running")
 
     def main_flow(self, colour_part_id):
-        self.move_robot.move_out_of_view(speed=3)
-        self.reference_image = self.move_robot.get_image()
-        #pimg.fromarray(image).show()
-        self.depth_image = self.move_robot.get_depth()
+        self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
         self.pick_and_place_part("BlueCover")
 
-        self.move_robot.move_out_of_view(speed=3)
-        self.reference_image = self.move_robot.get_image()
-        # pimg.fromarray(image).show()
-        self.depth_image = self.move_robot.get_depth()
+        self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
         self.pick_and_place_part("PCB")
 
-        self.move_robot.move_out_of_view(speed=3)
-        self.reference_image = self.move_robot.get_image()
-        # pimg.fromarray(image).show()
-        self.depth_image = self.move_robot.get_depth()
+        self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
         self.pick_and_place_part("WhiteCover")
@@ -79,7 +70,7 @@ class Controller:
                 applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
                 cv2.imshow("picking", cv2.cvtColor(cv2.resize(applied_mask, (1280, 720)), cv2.COLOR_RGB2BGR))
                 cv2.waitKey()
-                pose = self.surface_normals.vector_normal(np_mask, self.depth_image, self.reference_image)
+                pose, normal_vector = self.surface_normals.vector_normal(np_mask, self.depth_image, self.reference_image)
                 print(f'gripping {mask["part"]} at {pose}')
                 self.move_robot.set_tcp(self.move_robot.suction_tcp)
                 self.move_robot.movel([pose[0], pose[1], 200, 0, 0, 0])
@@ -127,9 +118,10 @@ class Controller:
         else:
             return masks[highest_index]
 
-    def get_image(self):
-        self.move_robot.move_out_of_view()
-        self.np_image = self.vision.capture_image()
+    def capture_images(self):
+        self.move_robot.move_out_of_view(speed=3)
+        self.reference_image = self.camera.get_image()
+        self.depth_image = self.camera.get_depth()
 
     def choose_action(self):
         print("Please write a command (write 'help' for a list of commands):")

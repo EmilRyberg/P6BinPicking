@@ -71,7 +71,7 @@ class SurfaceNormals:
         pil_depth = pimg.fromarray(np_depthimage)
         pil_depth = pil_depth.resize((1920, 1080))
         np_depthimage = np.asarray(pil_depth)
-        mask_contours = self.find_contour(cv_mask)
+        mask_contours = self.find_contour(np_mask)
         Ax, Ay = self.find_center(mask_contours)
         Az = self.get_z(Ax, Ay, np_depthimage)
         A = self.aruco.calibrate(np_reference_image, Ax, Ay, Az)
