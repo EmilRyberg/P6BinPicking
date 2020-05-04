@@ -5,6 +5,7 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 
+
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
@@ -41,10 +42,31 @@ class SurfaceNormals:
 
     def get_z(self, x, y, depth_image):
         #TODO make finidng camera offset automatic
-        z = 1000 - depth_image[y, x] * 10 #get value in mm
+        z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
 
-    def vector_normal(self, cv_mask, np_depthimage, np_reference_image):
+    def get_tool_orientation_matrix(self, np_mask, np_depth_image, np_reference_image):
+        center, normal_vector = self.vector_normal(np_mask, np_depth_image, np_reference_image)
+        tool_direction = normal_vector * -1
+        s = np.sin(np.pi / 2)
+        c = np.cos(np.pi / 2)
+        s2 = np.sin(-np.pi / 2)
+        c2 = np.cos(-np.pi / 2)
+        Ry = np.array([[c, 0, s],
+                       [0, 1, 0],
+                       [-s, 0, c]])
+        Rz = np.array([[c2, -s2, 0],
+                       [s2, c2, 0],
+                       [0, 0, 1]])
+        x_vector = np.dot(Ry, tool_direction)
+        x_vector = x_vector / np.linalg.norm(x_vector)
+        y_vector = np.dot(Rz, x_vector)
+        y_vector = y_vector / np.linalg.norm(y_vector)
+        matrix = np.append(x_vector.reshape((3, 1)), y_vector.reshape((3, 1)), axis=1)
+        matrix = np.append(matrix, tool_direction.reshape((3, 1)), axis=1)
+        return center, matrix
+
+    def vector_normal(self, np_mask, np_depthimage, np_reference_image):
         # depth = image_shifter.shift_image(depth)
         pil_depth = pimg.fromarray(np_depthimage)
         pil_depth = pil_depth.resize((1920, 1080))
@@ -62,10 +84,11 @@ class SurfaceNormals:
 
         vector2 = C-A
         vector1 = B-A
-        normal_vector = np.cross(vector1, vector2) *-1
+        normal_vector = np.cross(vector2, vector1)
+        normal_vector = normal_vector / np.linalg.norm(normal_vector)
 
-        #print(normal_vector)
-        return [A[0], A[1], A[2], normal_vector[0], normal_vector[1], normal_vector[2]] #world xyz and normal vector for now
+        print(normal_vector)
+        return A, normal_vector
         """
         #DEBUG CODE FOR VISUALISATION
         a, b, c = normal_vector
@@ -102,9 +125,8 @@ class SurfaceNormals:
         #plt.savefig('images/plane.png')
         plt.show()"""
 
-    def find_contour(self, cv_mask):
-        #mask = np_mask[:, :, ::-1].copy()
-        mask = cv_mask
+    def find_contour(self, np_mask):
+        mask = np_mask.copy()
         #mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         kernel = np.ones((10, 10), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
@@ -112,7 +134,7 @@ class SurfaceNormals:
         #cv2.imshow("MORPH", mask)
         #cv2.waitKey(0)
 
-        cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+        cnts = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
         cnts = imutils.grab_contours(cnts)
         return cnts
@@ -133,6 +155,7 @@ class SurfaceNormals:
             #cv2.imshow("CENTER", mask_coloured)
             #cv2.waitKey(0)
             return cX, cY
+
 
 if __name__ == "__main__":
     sn = SurfaceNormals()
