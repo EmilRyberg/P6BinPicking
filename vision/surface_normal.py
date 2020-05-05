@@ -4,11 +4,13 @@ import cv2
 from PIL import Image as pimg
 import imutils
 from aruco import Calibration
+from vision.vision import Vision
 
 
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
+        self.vision = Vision()
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -50,13 +52,16 @@ class SurfaceNormals:
         tool_direction = normal_vector * -1
         s = np.sin(np.pi / 2)
         c = np.cos(np.pi / 2)
-        s2 = np.sin(-np.pi / 2)
-        c2 = np.cos(-np.pi / 2)
+
+        theta_z = self.vision.long_axis_rotation(np_mask)
+        s_z = np.sin(theta_z)
+        c_z = np.cos(theta_z)
+
         Ry = np.array([[c, 0, s],
                        [0, 1, 0],
                        [-s, 0, c]])
-        Rz = np.array([[c2, -s2, 0],
-                       [s2, c2, 0],
+        Rz = np.array([[c_z, -s_z, 0],
+                       [s_z, c_z, 0],
                        [0, 0, 1]])
         x_vector = np.dot(Ry, tool_direction)
         x_vector = x_vector / np.linalg.norm(x_vector)
