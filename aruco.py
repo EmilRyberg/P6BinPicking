@@ -31,7 +31,8 @@ class Calibration:
         timer = time.time()
 
         # RGB to BGR, then grayscale
-        opencv_image = np_image[:, :, ::-1].copy()
+        #opencv_image = np_image[:, :, ::-1].copy()
+        opencv_image = np_image
         opencv_image_gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
         #cv2.imshow("a", opencv_image_gray)
         #cv2.waitKey()
