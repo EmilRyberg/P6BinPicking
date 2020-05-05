@@ -127,12 +127,9 @@ class SurfaceNormals:
 
     def find_contour(self, np_mask):
         mask = np_mask.copy()
-        #mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
         kernel = np.ones((10, 10), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        #cv2.imshow("MORPH", mask)
-        #cv2.waitKey(0)
 
         cnts = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
@@ -140,21 +137,13 @@ class SurfaceNormals:
         return cnts
 
     def find_center(self, cnts):
-        for c in cnts:
-            # compute the center of the contour
-            M = cv2.moments(c)
-            cX = int(M["m10"] / M["m00"])
-            cY = int(M["m01"] / M["m00"])
-            # draw the contour and center of the shape on the image
-            #mask_coloured = cv2.cvtColor(mask,cv2.COLOR_GRAY2RGB)
-            # cv2.drawContours(mask_coloured, [c], -1, (0, 255, 0), 2)
-            # cv2.circle(mask_coloured, (cX, cY), 7, (255, 0, 255), -1)
-            # cv2.putText(mask_coloured, "center", (cX - 20, cY - 20),
-            # cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-            # show the image
-            #cv2.imshow("CENTER", mask_coloured)
-            #cv2.waitKey(0)
-            return cX, cY
+        if len(cnts) == 0:
+            return -1, -1
+        c = cnts[0]
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        return cX, cY
 
 
 if __name__ == "__main__":
