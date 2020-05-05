@@ -1,9 +1,15 @@
 from controller.controller import Controller
+from move_robot.move_robot import MoveRobot
 from safety.safety import Safety
+from real_camera_interface import RealCamera
 import threading
 
+UR_IP = "192.168.1.148"
+
 if __name__ == "__main__":
-    controller = Controller()
+    move_robot = MoveRobot(UR_IP)
+    camera_interface = RealCamera()
+    controller = Controller(move_robot, camera_interface)
     safety_control = Safety()
     quit_program = False
 

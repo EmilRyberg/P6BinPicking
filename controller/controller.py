@@ -17,10 +17,9 @@ UR_IP = "192.168.1.148"
 
 
 class Controller:
-    def __init__(self):
-        #self.move_robot = MoveRobot(UR_IP)
-        self.move_robot = SimulationConnector(2000)
-        self.camera = CameraInterface(mode="simulation", simulation_connector_instance=self.move_robot)
+    def __init__(self, move_robot, camera_interface: CameraInterface):
+        self.move_robot = move_robot
+        self.camera = camera_interface
         self.vision = Vision()
         self.surface_normals = SurfaceNormals()
         self.detected_objects = None
