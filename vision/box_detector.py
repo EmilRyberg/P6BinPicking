@@ -2,14 +2,18 @@ import cv2
 import numpy as np
 import math
 import time
+from controllers.ur_controller.P6BinPicking.aruco import Calibration
+
 
 
 class BoxDetector:
     def __init__(self):
-        self.mean = np.array([23, 85, 137], np.uint8) #simulation thresholds
-        self.std = np.array([2, 5, 4], np.uint8) #simulation thresholds
+        self.mean = np.array([24, 87, 126], np.uint8) #simulation thresholds
+        self.std = np.array([5, 5, 5], np.uint8) #simulation thresholds
         self.lower_thresh = self.mean - self.std
         self.upper_thresh = self.mean + self.std
+        self.calibration = Calibration()
+
 
     def find_box(self, img, debug=False):
         img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -69,8 +73,8 @@ class BoxDetector:
 
         return final_rect
 
-    def get_average_pixel_value(self, image_name):
-        img = cv2.imread(image_name, cv2.IMREAD_COLOR)
+    def get_average_pixel_value(self, img):
+        #img = cv2.imread(image_name, cv2.IMREAD_COLOR)
         roi_x, roi_y, roi_width, roi_height = cv2.selectROI("select", img)
         cv2.destroyWindow("select")
 
@@ -82,6 +86,20 @@ class BoxDetector:
         print(f'mean: {mean}, std: {std}')
 
         cv2.waitKey(0)
+
+    def box_grasp_location(self, cv2_image, pil_image):
+        box_location = self.find_box(cv2_image)
+        grasp_x = box_location[2][0] + int(((box_location[3][0] - box_location[2][0]) / 2))
+        grasp_y = box_location[2][1] + int(((box_location[3][1] - box_location[2][1]) / 2))
+        vector = [box_location[3][0] - box_location[2][0], box_location[3][1] - box_location[2][1]]
+        box_start_vector = [0, -483]  # hardcoded
+        dot_product = np.array(box_start_vector) @ np.array(vector)
+        norm_dot_product = np.linalg.norm(np.array(box_start_vector) * np.linalg.norm(np.array(vector)))
+        angle = np.arccos(dot_product / norm_dot_product)
+        # print(angle)
+        # print(grasp_x,grasp_y)
+        grasp_location = self.calibration.calibrate(pil_image, grasp_x, grasp_y, 130)
+        return grasp_location, angle
 
 
 if __name__ == "__main__":
