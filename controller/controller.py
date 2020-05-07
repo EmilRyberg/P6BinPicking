@@ -1,5 +1,6 @@
 from vision.vision import Vision
-from enums import PartEnum
+from controller.enums import PartEnum
+from aruco import Calibration
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -136,6 +137,10 @@ class Controller:
             print("Invalid command, please try again")
 
         return False
+
+    def has_object_between_fingers(self):
+        return self.move_robot.get_gripper_distance() > 0.001
+
 
 if __name__ == "__main__":
     from simulation_camera_interface import SimulationCamera

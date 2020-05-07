@@ -87,7 +87,7 @@ class BoxDetector:
 
         cv2.waitKey(0)
 
-    def box_grasp_location(self, cv2_image, pil_image):
+    def box_grasp_location(self, cv2_image):
         box_location = self.find_box(cv2_image)
         grasp_x = box_location[2][0] + int(((box_location[3][0] - box_location[2][0]) / 2))
         grasp_y = box_location[2][1] + int(((box_location[3][1] - box_location[2][1]) / 2))
@@ -98,7 +98,7 @@ class BoxDetector:
         angle = np.arccos(dot_product / norm_dot_product)
         # print(angle)
         # print(grasp_x,grasp_y)
-        grasp_location = self.calibration.calibrate(pil_image, grasp_x, grasp_y, 130)
+        grasp_location = self.calibration.calibrate(cv2_image, grasp_x, grasp_y, 130)
         return grasp_location, angle
 
 
