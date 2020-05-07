@@ -1,19 +1,11 @@
-from move_robot.move_robot import MoveRobot
 from vision.vision import Vision
 from enums import PartEnum
-from aruco import Calibration
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
 import numpy as np
 import random
-from simulation_connector import SimulationConnector
 from camera_interface import CameraInterface
-
-NUMBER_OF_PARTS = 4
-FIXTURE_X = 255
-FIXTURE_Y = -320
-UR_IP = "192.168.1.148"
 
 
 class Controller:
@@ -67,16 +59,17 @@ class Controller:
             else:
                 np_mask = np.asarray(mask["mask"])
                 applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
-                cv2.imshow("picking", cv2.cvtColor(cv2.resize(applied_mask, (1280, 720)), cv2.COLOR_RGB2BGR))
+                cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
                 cv2.waitKey()
-                pose, normal_vector = self.surface_normals.vector_normal(np_mask, self.depth_image, self.reference_image)
-                print(f'gripping {mask["part"]} at {pose}')
+                center, rotvec, normal_vector = self.surface_normals.get_tool_orientation_matrix(np_mask, self.depth_image, self.reference_image)
+                print(f'gripping {mask["part"]} at {center}')
                 self.move_robot.set_tcp(self.move_robot.suction_tcp)
-                self.move_robot.movel([pose[0], pose[1], 200, 0, 0, 0])
-                self.move_robot.movel([pose[0], pose[1], pose[2]+5, 0, 0, 0])
+                approach_center = center + 200*normal_vector
+                self.move_robot.movel(np.concatenate((approach_center, rotvec)))
+                self.move_robot.movel(np.concatenate((center, rotvec)))
                 self.move_robot.enable_suction()
-                self.move_robot.movel([pose[0], pose[1], 200, 0, 0, 0])
-                self.move_robot.movel([-350, -300, 200, 0, 0, 0])
+                self.move_robot.movel([center[0], center[1], 200, rotvec[0], rotvec[1], rotvec[2]])
+                self.move_robot.movel([-350, -300, 200, rotvec[0], rotvec[1], rotvec[2]])
                 self.move_robot.disable_suction()
                 print("success")
                 success = True
@@ -145,5 +138,9 @@ class Controller:
         return False
 
 if __name__ == "__main__":
-    controller = Controller()
+    from simulation_camera_interface import SimulationCamera
+    from simulation_connector import SimulationConnector
+    connector = SimulationConnector(2000)
+    camera = SimulationCamera(connector)
+    controller = Controller(connector, camera)
     controller.main_flow(1)
