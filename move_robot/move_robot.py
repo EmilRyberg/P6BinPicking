@@ -2,7 +2,7 @@ import socket
 import time
 import math
 import urx
-from controller.enums import PartEnum, OrientationEnum
+#from controller.enums import PartEnum, OrientationEnum
 
 GRIPPER_IP = "192.168.1.118"
 GRIPPER_PORT = 1000

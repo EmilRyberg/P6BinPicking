@@ -4,6 +4,7 @@ import cv2
 from PIL import Image as pimg
 import imutils
 from aruco import Calibration
+from scipy.spatial.transform import Rotation
 
 
 class SurfaceNormals:
@@ -29,8 +30,9 @@ class SurfaceNormals:
             if mask_contour[i][0][1]>max_y:
                 max_y = mask_contour[i][0][1]
 
-        x_offset = int((max_x - centre_x) / 2)
-        y_offset = int((max_y - centre_y) / 2)
+        x_offset = int((max_x - centre_x) *0.8)
+        y_offset = int((max_y - centre_y) *0.8)
+
 
         if point_number == 1:
             return centre_x + x_offset, centre_y
@@ -64,12 +66,20 @@ class SurfaceNormals:
         y_vector = y_vector / np.linalg.norm(y_vector)
         matrix = np.append(x_vector.reshape((3, 1)), y_vector.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, tool_direction.reshape((3, 1)), axis=1)
-        return center, matrix
+        rot = Rotation.from_matrix(matrix)
+        rotvec = rot.as_rotvec()
+
+        reference_z = np.array([0, 0, 1])
+        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector), -1.0, 1.0))
+        return center, rotvec, normal_vector, relative_angle_to_z
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image):
         # depth = image_shifter.shift_image(depth)
+        #pimg.fromarray(np_reference_image).show()
         pil_depth = pimg.fromarray(np_depthimage)
         pil_depth = pil_depth.resize((1920, 1080))
+        #pil_depth.show()
+        #pimg.fromarray(np_mask).show()
         np_depthimage = np.asarray(pil_depth)
         mask_contours = self.find_contour(np_mask)
         Ax, Ay = self.find_center(mask_contours)
@@ -87,52 +97,24 @@ class SurfaceNormals:
         normal_vector = np.cross(vector2, vector1)
         normal_vector = normal_vector / np.linalg.norm(normal_vector)
 
-        print(normal_vector)
+        #print(normal_vector)
         return A, normal_vector
-        """
-        #DEBUG CODE FOR VISUALISATION
-        a, b, c = normal_vector
 
-        # This evaluates a * x3 + b * y3 + c * z3 which equals d
-        d = np.dot(normal_vector, D)
-
-        print('The equation is {0}x + {1}y + {2}z = {3}'.format(a, b, c, d))
-
-        import matplotlib.pyplot as plt
-        from mpl_toolkits.mplot3d import Axes3D
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-
-        x = np.linspace(B[0], C[0], D[0])
-        y = np.linspace(B[1], C[1], D[1])
-        X, Y = np.meshgrid(x, y)
-
-        Z = (d - a * X - b * Y) / c
-
-        # plot the mesh. Each array is 2D, so we flatten them to 1D arrays
-        ax.plot(X.flatten(),
-        Y.flatten(),
-        Z.flatten(), 'bo ')
-
-        # plot the original points. We use zip to get 1D lists of x, y and z
-        # coordinates.
-        ax.plot(*zip(B, C, D), color='r', linestyle=' ', marker='o')
-        vector_origin = B
-        ax.quiver(vector_origin[0], vector_origin[1], vector_origin[2], normal_vector[0], normal_vector[1], normal_vector[2])
-        # adjust the view so we can see the point/plane alignment
-        ax.view_init(10, 20)
-        plt.tight_layout()
-        #plt.savefig('images/plane.png')
-        plt.show()"""
 
     def find_contour(self, np_mask):
         mask = np_mask.copy()
         kernel = np.ones((10, 10), np.uint8)
+        #cv2.imshow("a", mask)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
         mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+        #cv2.imshow("b", mask)
+
 
         cnts = cv2.findContours(mask, cv2.RETR_EXTERNAL,
                                 cv2.CHAIN_APPROX_SIMPLE)
+        #c = cv2.drawContours(mask, cnts[0], -1, [120, 0, 0], thickness=2)
+        #cv2.imshow("c", c)
+        # cv2.waitKey()
         cnts = imutils.grab_contours(cnts)
         return cnts
 
@@ -148,7 +130,10 @@ class SurfaceNormals:
 
 if __name__ == "__main__":
     sn = SurfaceNormals()
-    np_mask = np.array(pimg.open("bottom.png"))
-    np_depth = np.asarray(pimg.open("depth.png"))
-    np_reference = np.asarray(pimg.open("ref.png"))
-    sn.vector_normal(np_mask, np_depth, np_reference)
+    np_mask = np.asarray(pimg.open("m.BMP"))
+    #np_mask = cv2.cvtColor(np_mask, cv2.COLOR_RGB2GRAY)
+    np_depth = np.asarray(pimg.open("d.BMP"))
+    #np_depth = cv2.cvtColor(np_depth, cv2.COLOR_RGB2GRAY)
+    np_reference = np.asarray(pimg.open("r.BMP"))
+    a = sn.get_tool_orientation_matrix(np_mask, np_depth, np_reference)
+    pass

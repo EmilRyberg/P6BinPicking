@@ -1,5 +1,5 @@
 from vision.vision import Vision
-from enums import PartEnum
+#from enums import PartEnum
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -22,6 +22,7 @@ class Controller:
         self.score_threshold = 0.6
         self.reference_image = None
         self.depth_image = None
+        self.part_position_details = None
 
         print("[I] Controller running")
 
@@ -29,7 +30,7 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("BlueCover")
+        self.pick_and_place_part("BlackCover")
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
@@ -39,7 +40,7 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("WhiteCover")
+        self.pick_and_place_part("BlueCover")
 
         #self.pick_and_place_part("pcb")
 
@@ -61,16 +62,21 @@ class Controller:
                 applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
                 cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
                 cv2.waitKey()
-                center, rotvec, normal_vector = self.surface_normals.get_tool_orientation_matrix(np_mask, self.depth_image, self.reference_image)
+                center, rotvec, normal_vector, relative_angle_to_z = self.part_position_details
                 print(f'gripping {mask["part"]} at {center}')
                 self.move_robot.set_tcp(self.move_robot.suction_tcp)
+                self.move_robot.movel([0, -300, 300, 0, 3.14, 0])
                 approach_center = center + 200*normal_vector
-                self.move_robot.movel(np.concatenate((approach_center, rotvec)))
-                self.move_robot.movel(np.concatenate((center, rotvec)))
+                pose_approach = np.concatenate((approach_center, rotvec))
+                self.move_robot.movel(pose_approach)
+                pose_pick = np.concatenate((center, rotvec))
+                self.move_robot.movel(pose_pick)
                 self.move_robot.enable_suction()
-                self.move_robot.movel([center[0], center[1], 200, rotvec[0], rotvec[1], rotvec[2]])
-                self.move_robot.movel([-350, -300, 200, rotvec[0], rotvec[1], rotvec[2]])
+                self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0])
+                self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
+                self.move_robot.movel([200, -200, 50, 0, 3.14, 0])
                 self.move_robot.disable_suction()
+                self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
                 print("success")
                 success = True
                 """
@@ -103,8 +109,13 @@ class Controller:
         highest_area = -1
         for index, mask in enumerate(masks):
             if mask["part"] == part and mask["area"] > highest_area and mask["ignored"] == False:
-                highest_index = index
-                highest_area = mask["area"]
+                self.part_position_details = self.surface_normals.get_tool_orientation_matrix(mask["mask"], self.depth_image, self.reference_image)
+                if self.part_position_details[3] < 0.8: # check how flat it is (relative angle to reference z)
+                    highest_index = index
+                    highest_area = mask["area"]
+                else:
+                    mask["ignored"] = True
+                    mask["ignore_reason"] += "not flat enough, "
         if highest_index == -1: #if none are acceptable
             return False
         else:
