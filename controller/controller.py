@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 import random
 from camera_interface import CameraInterface
+from vision.box_detector import BoxDetector
 
 
 class Controller:
@@ -13,6 +14,7 @@ class Controller:
         self.move_robot = move_robot
         self.camera = camera_interface
         self.vision = Vision()
+        self.box_detector = BoxDetector()
         self.surface_normals = SurfaceNormals()
         self.detected_objects = None
         self.masks = None
@@ -51,9 +53,10 @@ class Controller:
             mask = self.find_best_mask_by_part(part, self.masks)
             if mask == False:
                 print("no appropriate part found")
-                #shake
-                #detect
                 print(f"shaking, try {self.unsuccessful_grip_shake_counter}/3")
+                self.move_robot.move_box()
+                self.move_robot.move_out_of_view()
+                self.capture_images()
                 for mask in self.masks:
                     mask["ignored"] = False
                 self.unsuccessful_grip_shake_counter +=1
@@ -99,8 +102,8 @@ class Controller:
                 mask["ignored"] = True
                 mask["ignore_reason"] += "low confidence, "
             x, y = mask["center"]
-            #TODO replace with box detector
-            if x<700 or x>1210 or y<310 or y>830:
+            box_location, box_mask = self.box_detector.find_box(self.reference_image, get_mask=True)
+            if box_mask[y,x] == 0:
                 mask["ignored"] = True
                 mask["ignore_reason"] += "outside box, "
 
@@ -145,8 +148,11 @@ class Controller:
             return True
         else:
             print("Invalid command, please try again")
-
         return False
+
+    def has_object_between_fingers(self):
+        return self.move_robot.get_gripper_distance() > 0.001
+
 
 if __name__ == "__main__":
     from simulation_camera_interface import SimulationCamera

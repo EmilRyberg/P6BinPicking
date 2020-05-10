@@ -15,7 +15,7 @@ class BoxDetector:
         self.calibration = Calibration()
 
 
-    def find_box(self, img, debug=False):
+    def find_box(self, img, debug=False, get_mask=False):
         img_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         lower_thresh = (int(self.lower_thresh[0]), int(self.lower_thresh[1]), int(self.lower_thresh[2]))
         upper_thresh = (int(self.upper_thresh[0]), int(self.upper_thresh[1]), int(self.upper_thresh[2]))
@@ -71,7 +71,10 @@ class BoxDetector:
             cv2.imwrite("lower_approximation_contour.png", img_cont2)
             cv2.waitKey(0)
 
-        return final_rect
+        if get_mask==True:
+            return final_rect, img_binary_final
+        else:
+            return final_rect
 
     def get_average_pixel_value(self, img):
         #img = cv2.imread(image_name, cv2.IMREAD_COLOR)
@@ -87,7 +90,7 @@ class BoxDetector:
 
         cv2.waitKey(0)
 
-    def box_grasp_location(self, cv2_image, pil_image):
+    def box_grasp_location(self, cv2_image):
         box_location = self.find_box(cv2_image)
         grasp_x = box_location[2][0] + int(((box_location[3][0] - box_location[2][0]) / 2))
         grasp_y = box_location[2][1] + int(((box_location[3][1] - box_location[2][1]) / 2))
@@ -98,7 +101,7 @@ class BoxDetector:
         angle = np.arccos(dot_product / norm_dot_product)
         # print(angle)
         # print(grasp_x,grasp_y)
-        grasp_location = self.calibration.calibrate(pil_image, grasp_x, grasp_y, 130)
+        grasp_location = self.calibration.calibrate(cv2_image, grasp_x, grasp_y, 130)
         return grasp_location, angle
 
 

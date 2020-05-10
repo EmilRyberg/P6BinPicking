@@ -354,6 +354,9 @@ class MoveRobot:
             self.movel(self.align_pcb_pick_2, vel=0.2)
             self.movel(self.align_pcb_pick_3, vel=0.2)
 
+    def get_gripper_distance(self):
+        raise NotImplementedError()
+
 
 if __name__ == "__main__":
     robot = MoveRobot("192.168.1.148")
