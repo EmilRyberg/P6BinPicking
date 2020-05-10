@@ -36,7 +36,7 @@ class Vision:
         #self.orientationCNN.load_state_dict(torch.load(ORIENTATION_MODEL_PATH))
         #self.shifter = image_shifter.RuntimeShifter
         self.calibrate = Calibration()
-        self.segmentation_detector = InstanceDetector('vision/model_final_0-002LR.pth')
+        self.segmentation_detector = InstanceDetector('vision/model_final_sim.pth')
 
     def __del__(self):
         pass
