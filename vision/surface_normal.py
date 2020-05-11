@@ -50,19 +50,18 @@ class SurfaceNormals:
     def get_tool_orientation_matrix(self, np_mask, np_depth_image, np_reference_image):
         center, normal_vector = self.vector_normal(np_mask, np_depth_image, np_reference_image)
         tool_direction = normal_vector * -1
+        tool_direction = np.dot(self.vision.long_axis_rotation(np_mask), tool_direction)
         s = np.sin(np.pi / 2)
         c = np.cos(np.pi / 2)
-
-        theta_z = self.vision.long_axis_rotation(np_mask)
-        s_z = np.sin(theta_z)
-        c_z = np.cos(theta_z)
-
+        s2 = np.sin(-np.pi / 2)
+        c2 = np.cos(-np.pi / 2)
         Ry = np.array([[c, 0, s],
                        [0, 1, 0],
                        [-s, 0, c]])
-        Rz = np.array([[c_z, -s_z, 0],
-                       [s_z, c_z, 0],
+        Rz = np.array([[c2, -s2, 0],
+                       [s2, c2, 0],
                        [0, 0, 1]])
+        
         x_vector = np.dot(Ry, tool_direction)
         x_vector = x_vector / np.linalg.norm(x_vector)
         y_vector = np.dot(Rz, x_vector)

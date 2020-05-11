@@ -175,7 +175,11 @@ class Vision:
 
         theta = np.arctan(top / bot)
 
-        return -theta
+        r_mat = np.array([[np.cos(theta), np.sin(-theta), 0],
+                          [np.sin(theta), np.cos(theta), 0],
+                          [0, 0, 1]])
+
+        return r_mat
 
         #debug/test stuff
         #cv2.circle(img, center, 5, 0)
