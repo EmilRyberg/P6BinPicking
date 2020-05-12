@@ -145,39 +145,6 @@ class Vision:
         print(part_to_grasp)
         return part_to_grasp
 
-    def long_axis_rotation(self, image):
-        img = cv2.imread(self.image_path, 0)
-
-        #kernel = np.ones((10,10),np.uint8) #DEBUG
-        #img_morph = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel)
-        #img_morph = cv2.morphologyEx(img_morph, cv2.MORPH_OPEN, kernel)
-
-        #Getting the img ready for PCA
-        mat = np.argwhere(img != 0)
-        mat[:, [0, 1]] = mat[:, [1, 0]]
-        mat = np.array(mat).astype(np.float32) #have to convert type for PCA
-
-        m, e = cv2.PCACompute(mat, mean = np.array([])) #computing PCA
-
-        center = tuple(m[0]) #center of object
-        endpoint = tuple(m[0] + e[0]) #end point of 
-
-        long_axis = (center[0]-endpoint[0], center[1]-endpoint[1])
-        long_axis_length = np.sqrt(long_axis[0]**2 + long_axis[1]**2)
-        long_unit = long_axis / long_axis_length
-        unit_y = (0, 1)
-
-        top = unit_y[1]*long_unit[0]-unit_y[0]*long_unit[1]
-        bot = unit_y[0]*long_unit[0]+unit_y[1]*long_unit[1]
-
-        theta = np.arctan(top / bot)
-
-        return -theta
-
-        #debug/test stuff
-        #cv2.circle(img, center, 5, 0)
-        #cv2.line(img, center, endpoint, 100)
-        #cv2.imwrite("out.bmp", img_morph)
 
 if __name__ == "__main__":
     hey = Vision()

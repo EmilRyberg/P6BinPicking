@@ -5,11 +5,13 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 from scipy.spatial.transform import Rotation
+from vision.vision import Vision
 
 
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
+        self.vision = Vision()
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -43,9 +45,61 @@ class SurfaceNormals:
             exit(-1)
 
     def get_z(self, x, y, depth_image):
-        #TODO make finidng camera offset automatic
+        #TODO make finding camera offset automatic
         z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
+
+    def get_gripper_orientation(self, np_mask, np_depth_image, np_reference_image, rotation_around_self_z=0, debug=False):
+        # Getting the img ready for PCA
+        mat = np.argwhere(np_mask != 0)
+        mat[:, [0, 1]] = mat[:, [1, 0]]
+        mat = np.array(mat).astype(np.float32)  # have to convert type for PCA
+
+        pil_depth = pimg.fromarray(np_depth_image)
+        pil_depth = pil_depth.resize((1920, 1080))
+        np_depth_image = np.asarray(pil_depth)
+
+        mean, eigenvectors = cv2.PCACompute(mat, mean=np.array([]))  # computing PCA
+
+        center_img_space = np.array(np.round(mean[0]), dtype=np.int32)
+        long_vector_point = np.array(np.round(center_img_space + eigenvectors[0] * 20), dtype=np.int32)
+        short_vector_point = np.array(np.round(center_img_space + eigenvectors[1] * 20), dtype=np.int32)
+        print(f'center: {center_img_space}, long: {long_vector_point}, short: {short_vector_point}')
+
+        center_z = self.get_z(center_img_space[0], center_img_space[1], np_depth_image)
+        center = self.aruco.calibrate(np_reference_image, center_img_space[0], center_img_space[1], center_z)
+        long_vector_z = self.get_z(long_vector_point[0], long_vector_point[1], np_depth_image)
+        long_vector = self.aruco.calibrate(np_reference_image, long_vector_point[0], long_vector_point[1], long_vector_z)
+        short_vector_z = self.get_z(short_vector_point[0], short_vector_point[1], np_depth_image)
+        short_vector = self.aruco.calibrate(np_reference_image, short_vector_point[0], short_vector_point[1], short_vector_z)
+
+        vector1 = long_vector - center  # from tests this should be x (if normal is pointing in)
+        vector2 = short_vector - center  # and this y
+        normal_vector_in = self.__calculate_normal(vector1, vector2)
+        normal_vector_out = normal_vector_in * -1
+
+        matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
+        matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
+
+        rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
+        # print(rotvec)
+
+        reference_z = np.array([0, 0, 1])
+        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
+
+        # print(normal_vector)
+        # return A, normal_vector_out
+        if debug:
+            # debug/test stuff
+            np_mask_255 = np_mask * 255
+            rgb_img = cv2.cvtColor(np_mask_255, cv2.COLOR_GRAY2BGR)
+            cv2.circle(rgb_img, tuple(center_img_space), 5, 0)
+            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[0] * 20), (0, 0, 255))
+            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[1] * 20), (0, 255, 0))
+            cv2.imshow("out", rgb_img)
+            cv2.waitKey(0)
+
+        return center, rotvec, normal_vector_out, relative_angle_to_z
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image, rotation_around_self_z=0):
         # depth = image_shifter.shift_image(depth)
@@ -66,30 +120,16 @@ class SurfaceNormals:
         Cz = self.get_z(Cx, Cy, np_depthimage)
         C = self.aruco.calibrate(np_reference_image, Cx, Cy, Cz)
 
-        vector2 = C-A #pointing down = effective -x
-        vector1 = B-A #pointing right = effective y
-        vector1 = vector1 / np.linalg.norm(vector1)
-        vector2 = vector2 / np.linalg.norm(vector2)
-        normal_vector_out = np.cross(vector2, vector1)
-        normal_vector_out = normal_vector_out / np.linalg.norm(normal_vector_out)
-        normal_vector_in = normal_vector_out * -1
+        vector1 = B - A
+        vector2 = C - A
+        normal_vector_in = self.__calculate_normal(vector1, vector2)
+        normal_vector_out = normal_vector_in * -1
 
-        vector2 = vector2 * -1 # convert to effective x
-        matrix = np.append(vector2.reshape((3, 1)), vector1.reshape((3, 1)), axis=1)
+        matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
         #print(matrix)
 
-        # https://math.stackexchange.com/questions/142821/matrix-for-rotation-around-a-vector
-        theta = rotation_around_self_z
-        ux, uy, uz = normal_vector_in[0], normal_vector_in[1], normal_vector_in[2]
-        W = np.array([[0, -uz, uy],
-                      [uz, 0, -ux],
-                      [-uy, ux, 0]])
-        I = np.identity(3)
-        R = I + np.sin(theta) * W + (1-np.cos(theta))*(W @ W)
-        #print(R)
-        orientation = R @ matrix
-        rotvec = Rotation.from_matrix(orientation).as_rotvec()
+        rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
         #print(rotvec)
 
         reference_z = np.array([0, 0, 1])
@@ -99,6 +139,25 @@ class SurfaceNormals:
         #return A, normal_vector_out
         return A, rotvec, normal_vector_out, relative_angle_to_z
 
+    def __calculate_rotation_around_vector(self, theta, vector, rotation_matrix):
+        # https://math.stackexchange.com/questions/142821/matrix-for-rotation-around-a-vector
+        ux, uy, uz = vector[0], vector[1], vector[2]
+        W = np.array([[0, -uz, uy],
+                      [uz, 0, -ux],
+                      [-uy, ux, 0]])
+        I = np.identity(3)
+        R = I + np.sin(theta) * W + (1-np.cos(theta))*(W @ W)
+        #print(R)
+        orientation = R @ rotation_matrix
+        rotvec = Rotation.from_matrix(orientation).as_rotvec()
+        return rotvec
+
+    def __calculate_normal(self, vector1, vector2):
+        vector1 = vector1 / np.linalg.norm(vector1)
+        vector2 = vector2 / np.linalg.norm(vector2)
+        normal_vector = np.cross(vector1, vector2)
+        normal_vector = normal_vector / np.linalg.norm(normal_vector)
+        return normal_vector
 
     def find_contour(self, np_mask):
         mask = np_mask.copy()
