@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 
 if __name__ == "__main__":
-    detector = InstanceDetector('model_final_0-002LR.pth')
+    detector = InstanceDetector('P6BinPicking/vision/model_final_sim.pth')
     img = cv2.imread('color1582022679.966812-0.png')
     results = detector.predict(img)
     #["PCB", "BottomCover", "BlueCover", "WhiteCover", "BlackCover"]

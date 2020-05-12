@@ -1,4 +1,4 @@
-from enums import PartEnum
+from controller.enums import PartEnum
 
 
 def convert_from_part_id(part_id):

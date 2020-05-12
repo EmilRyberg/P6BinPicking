@@ -6,11 +6,9 @@ import glob
 import imutils
 import numpy as np
 import scipy.misc
-from controller.enums import PartEnum, OrientationEnum
 import os
 from vision.orientation.orientation_detector import OrientationDetectorNet
-from controller.class_converter import convert_to_part_id, convert_from_part_id
-from utils import image_shifter
+from utils.image_shifter import RuntimeShifter
 from aruco import Calibration
 import torch
 from vision.segmentation.detector import InstanceDetector
@@ -38,7 +36,7 @@ class Vision:
         #self.orientationCNN.load_state_dict(torch.load(ORIENTATION_MODEL_PATH))
         #self.shifter = image_shifter.RuntimeShifter
         self.calibrate = Calibration()
-        self.segmentation_detector = InstanceDetector('vision/model_final_0-002LR.pth')
+        self.segmentation_detector = InstanceDetector('vision/model_final_sim.pth')
 
     def __del__(self):
         pass
@@ -74,8 +72,7 @@ class Vision:
         return part
 
     def segment(self, np_img):
-        bgr_img = cv2.cvtColor(np_img, cv2.COLOR_RGB2BGR)
-        results = self.segmentation_detector.predict(bgr_img)
+        results = self.segmentation_detector.predict(np_img)
         classes = ["PCB", "BottomCover", "BlueCover", "WhiteCover", "BlackCover"]
         masks = []
         for i in range(len(results["instances"].pred_classes)):

@@ -2,7 +2,7 @@ import socket
 import time
 import math
 import urx
-from controller.enums import PartEnum, OrientationEnum
+#from controller.enums import PartEnum, OrientationEnum
 
 GRIPPER_IP = "192.168.1.118"
 GRIPPER_PORT = 1000
@@ -353,6 +353,9 @@ class MoveRobot:
             self.enable_suction()
             self.movel(self.align_pcb_pick_2, vel=0.2)
             self.movel(self.align_pcb_pick_3, vel=0.2)
+
+    def get_gripper_distance(self):
+        raise NotImplementedError()
 
 
 if __name__ == "__main__":
