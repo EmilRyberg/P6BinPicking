@@ -7,6 +7,7 @@ import numpy as np
 import random
 from camera_interface import CameraInterface
 from vision.box_detector import BoxDetector
+from scipy.spatial.transform import Rotation
 
 
 class Controller:
@@ -25,6 +26,7 @@ class Controller:
         self.reference_image = None
         self.depth_image = None
         self.part_position_details = None
+        self.first_box_move = 0
 
         print("[I] Controller running")
 
@@ -32,7 +34,7 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("BlackCover")
+        self.pick_and_place_part("WhiteCover")
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
@@ -54,11 +56,10 @@ class Controller:
             if mask == False:
                 print("no appropriate part found")
                 print(f"shaking, try {self.unsuccessful_grip_shake_counter}/3")
-                self.move_robot.move_box()
+                self.move_box()
                 self.move_robot.move_out_of_view()
                 self.capture_images()
-                for mask in self.masks:
-                    mask["ignored"] = False
+                self.masks = self.vision.segment(self.reference_image)
                 self.unsuccessful_grip_shake_counter +=1
             else:
                 np_mask = np.asarray(mask["mask"])
@@ -68,7 +69,7 @@ class Controller:
                 center, rotvec, normal_vector, relative_angle_to_z = self.part_position_details
                 print(f'gripping {mask["part"]} at {center}')
                 self.move_robot.set_tcp(self.move_robot.suction_tcp)
-                self.move_robot.movel([0, -300, 300, 0, 3.14, 0])
+                self.move_robot.movel([0, -300, 300, 0, 3.14, 0], vel=0.8)
                 approach_center = center + 200*normal_vector
                 pose_approach = np.concatenate((approach_center, rotvec))
                 self.move_robot.movel(pose_approach)
@@ -112,7 +113,7 @@ class Controller:
         highest_area = -1
         for index, mask in enumerate(masks):
             if mask["part"] == part and mask["area"] > highest_area and mask["ignored"] == False:
-                self.part_position_details = self.surface_normals.get_tool_orientation_matrix(mask["mask"], self.depth_image, self.reference_image)
+                self.part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=-1.57)
                 if self.part_position_details[3] < 0.8: # check how flat it is (relative angle to reference z)
                     highest_index = index
                     highest_area = mask["area"]
@@ -128,6 +129,28 @@ class Controller:
         self.move_robot.move_out_of_view(speed=3)
         self.reference_image = self.camera.get_image()
         self.depth_image = self.camera.get_depth()
+
+    def move_box(self):
+        grasp_location, angle = self.box_detector.box_grasp_location(self.reference_image)
+        self.move_robot.set_tcp(self.move_robot.gripper_tcp)
+        self.move_robot.move_to_home()
+        rot = Rotation.from_euler("XYZ", [0, 3.14, 2.35-angle])
+        rot = rot.as_rotvec()
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]+20, rot[0], rot[1], rot[2]], vel=0.5)
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-80, rot[0], rot[1], rot[2]])
+        self.move_robot.grasp_box()
+        if self.first_box_move == 0:
+            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 60, rot[0], rot[1], rot[2]])
+            self.move_robot.movel([grasp_location[0]+80, grasp_location[1]+80, grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
+            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
+            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
+            self.first_box_move = 1
+        else:
+            self.move_robot.movel([grasp_location[0]-15, grasp_location[1]-15, grasp_location[2]-80, rot[0], rot[1], rot[2]])
+            self.first_box_move = 0
+        self.move_robot.open_gripper()
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] +40, rot[0], rot[1], rot[2]])
+        #print(grasp_location)
 
     def choose_action(self):
         print("Please write a command (write 'help' for a list of commands):")

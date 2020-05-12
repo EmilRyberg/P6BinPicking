@@ -47,33 +47,7 @@ class SurfaceNormals:
         z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
 
-    def get_tool_orientation_matrix(self, np_mask, np_depth_image, np_reference_image):
-        center, normal_vector = self.vector_normal(np_mask, np_depth_image, np_reference_image)
-        tool_direction = normal_vector * -1
-        s = np.sin(np.pi / 2)
-        c = np.cos(np.pi / 2)
-        s2 = np.sin(-np.pi / 2)
-        c2 = np.cos(-np.pi / 2)
-        Ry = np.array([[c, 0, s],
-                       [0, 1, 0],
-                       [-s, 0, c]])
-        Rz = np.array([[c2, -s2, 0],
-                       [s2, c2, 0],
-                       [0, 0, 1]])
-        x_vector = np.dot(Ry, tool_direction)
-        x_vector = x_vector / np.linalg.norm(x_vector)
-        y_vector = np.dot(Rz, x_vector)
-        y_vector = y_vector / np.linalg.norm(y_vector)
-        matrix = np.append(x_vector.reshape((3, 1)), y_vector.reshape((3, 1)), axis=1)
-        matrix = np.append(matrix, tool_direction.reshape((3, 1)), axis=1)
-        rot = Rotation.from_matrix(matrix)
-        rotvec = rot.as_rotvec()
-
-        reference_z = np.array([0, 0, 1])
-        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector), -1.0, 1.0))
-        return center, rotvec, normal_vector, relative_angle_to_z
-
-    def vector_normal(self, np_mask, np_depthimage, np_reference_image):
+    def vector_normal(self, np_mask, np_depthimage, np_reference_image, rotation_around_self_z=0):
         # depth = image_shifter.shift_image(depth)
         #pimg.fromarray(np_reference_image).show()
         pil_depth = pimg.fromarray(np_depthimage)
@@ -92,13 +66,38 @@ class SurfaceNormals:
         Cz = self.get_z(Cx, Cy, np_depthimage)
         C = self.aruco.calibrate(np_reference_image, Cx, Cy, Cz)
 
-        vector2 = C-A
-        vector1 = B-A
-        normal_vector = np.cross(vector2, vector1)
-        normal_vector = normal_vector / np.linalg.norm(normal_vector)
+        vector2 = C-A #pointing down = effective -x
+        vector1 = B-A #pointing right = effective y
+        vector1 = vector1 / np.linalg.norm(vector1)
+        vector2 = vector2 / np.linalg.norm(vector2)
+        normal_vector_out = np.cross(vector2, vector1)
+        normal_vector_out = normal_vector_out / np.linalg.norm(normal_vector_out)
+        normal_vector_in = normal_vector_out * -1
+
+        vector2 = vector2 * -1 # convert to effective x
+        matrix = np.append(vector2.reshape((3, 1)), vector1.reshape((3, 1)), axis=1)
+        matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
+        #print(matrix)
+
+        # https://math.stackexchange.com/questions/142821/matrix-for-rotation-around-a-vector
+        theta = rotation_around_self_z
+        ux, uy, uz = normal_vector_in[0], normal_vector_in[1], normal_vector_in[2]
+        W = np.array([[0, -uz, uy],
+                      [uz, 0, -ux],
+                      [-uy, ux, 0]])
+        I = np.identity(3)
+        R = I + np.sin(theta) * W + (1-np.cos(theta))*(W @ W)
+        #print(R)
+        orientation = R @ matrix
+        rotvec = Rotation.from_matrix(orientation).as_rotvec()
+        #print(rotvec)
+
+        reference_z = np.array([0, 0, 1])
+        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
 
         #print(normal_vector)
-        return A, normal_vector
+        #return A, normal_vector_out
+        return A, rotvec, normal_vector_out, relative_angle_to_z
 
 
     def find_contour(self, np_mask):
@@ -135,5 +134,6 @@ if __name__ == "__main__":
     np_depth = np.asarray(pimg.open("d.BMP"))
     #np_depth = cv2.cvtColor(np_depth, cv2.COLOR_RGB2GRAY)
     np_reference = np.asarray(pimg.open("r.BMP"))
-    a = sn.get_tool_orientation_matrix(np_mask, np_depth, np_reference)
+    #a = sn.get_tool_orientation_matrix(np_mask, np_depth, np_reference)
+    sn.vector_normal(np_mask, np_depth, np_reference)
     pass
