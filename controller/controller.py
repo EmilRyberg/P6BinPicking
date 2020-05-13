@@ -34,7 +34,7 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
+        self.pick_and_place_part(PartCategoryEnum.BOTTOM_COVER.value, debug)
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
@@ -44,7 +44,7 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.BLACK_COVER.value, debug)
+        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
 
         #self.pick_and_place_part("pcb")
 
@@ -53,7 +53,7 @@ class Controller:
         self.unsuccessful_grip_shake_counter = 0
         while success == False and self.unsuccessful_grip_shake_counter < 3:
             print("finding part: ", part)
-            mask = self.find_best_mask_by_part(part, self.masks)
+            mask = self.find_best_mask_by_part(part, self.masks, debug)
             if mask == False:
                 print("no appropriate part found")
                 print(f"shaking, try {self.unsuccessful_grip_shake_counter+1}/3")
@@ -95,10 +95,10 @@ class Controller:
                     approach_center = center + 200*normal_vector
                     pose_approach = np.concatenate((approach_center, rotvec))
                     self.move_robot.movel(pose_approach)
-                    pose_pick = np.concatenate((center - 25*normal_vector, rotvec))
+                    pose_pick = np.concatenate((center - 5*normal_vector, rotvec))
                     self.move_robot.close_gripper(50)
                     self.move_robot.movel(pose_pick)
-                    self.move_robot.close_gripper()
+                    self.move_robot.close_gripper(15, speed=1)
                     self.move_robot.movel([center[0], center[1], 300, 0, np.pi, 0])
                     self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
                     self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
@@ -116,7 +116,7 @@ class Controller:
         if self.unsuccessful_grip_shake_counter >= 3:
             input(f"manually pick {part} and press enter")
 
-    def find_best_mask_by_part(self, part, masks):
+    def find_best_mask_by_part(self, part, masks, debug=False):
         #first cull images by some basic criteria
         for index, mask in enumerate(masks):
             if mask["area"] < self.area_threshold:
@@ -127,65 +127,36 @@ class Controller:
                 mask["ignore_reason"] += "low confidence, "
             x, y = mask["center"]
             box_location, box_mask = self.box_detector.find_box(self.reference_image, get_mask=True)
-            if box_mask[y,x] == 0:
+            if box_mask[y, x] == 0:
                 mask["ignored"] = True
                 mask["ignore_reason"] += "outside box, "
 
-            if mask["part"] != PartCategoryEnum.PCB.value:
+            if mask["part"] != PartCategoryEnum.PCB.value and mask["part"] == part and not mask["ignored"]:
                 center, rotvec, normal_vector, relative_angle_to_z, short_vector_2d = self.surface_normals.get_gripper_orientation(
                     mask["mask"], self.depth_image, self.reference_image, 0)
-                print('mask center: ', mask["center"])
                 mask_center = np.asarray(mask["center"], dtype=np.int32)
-                print('mask shape: ', mask["mask"].shape)
                 pil_depth = pimg.fromarray(self.depth_image)
                 pil_depth = pil_depth.resize((1920, 1080))
                 np_rescaled_depth_image = np.asarray(pil_depth)
                 points_checking = []
-                print('short vector 2d:', short_vector_2d)
-                for i in range(30, 200):
-                    point_to_check = np.array(np.round(mask_center + short_vector_2d * i), dtype=np.int32)
-                    if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
-                        print('found zero point', point_to_check)
-                        point_on_mask = np.array(np.round(point_to_check - short_vector_2d * 10), dtype=np.int32)
-                        point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
-                                                                     np_rescaled_depth_image)
-                        offset_point = np.array(np.round(point_to_check + short_vector_2d * 5), dtype=np.int32)
-                        offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
-                                                                    np_rescaled_depth_image)
-                        z_difference = point_on_mask_z - offset_point_z
-                        points_checking.append((point_on_mask, offset_point))
-                        if z_difference <= 10:
-                            print(
-                                f'height difference is less than 10 mm. diff: {z_difference}, on mask: {point_on_mask_z}, offset: {offset_point_z}')
-                            mask["ignored"] = True
-                            mask["ignore_reason"] += "not enough space for fingers, "
+                points_on_mask = []
+                is_valid, mask_point, points_checked = self.check_for_valid_gripper_point(mask_center, mask, short_vector_2d, np_rescaled_depth_image)
+                points_checking.extend(points_checked)
+                points_on_mask.append(mask_point)
 
-                        break
                 if not mask["ignored"]:  # only check if first side is clear
-                    for i in range(30, 200):
-                        point_to_check = np.array(np.round(mask_center - short_vector_2d * i), dtype=np.int32)
-                        if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
-                            print('found zero point', point_to_check)
-                            point_on_mask = np.array(np.round(point_to_check + short_vector_2d * 10), dtype=np.int32)
-                            point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
-                                                                         np_rescaled_depth_image)
-                            offset_point = np.array(np.round(point_to_check - short_vector_2d * 5), dtype= np.int32)
-                            offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
-                                                                        np_rescaled_depth_image)
-                            z_difference = point_on_mask_z - offset_point_z
-                            points_checking.append((point_on_mask, offset_point))
-                            if z_difference <= 10:
-                                print(
-                                    f'height difference is less than 10 mm. diff: {z_difference}, on mask: {point_on_mask_z}, offset: {offset_point_z}')
-                                mask["ignored"] = True
-                                mask["ignore_reason"] += "not enough space for fingers, "
+                    is_valid, mask_point, points_checked = self.check_for_valid_gripper_point(mask_center, mask,
+                                                                                              -short_vector_2d,
+                                                                                              np_rescaled_depth_image)
+                    points_checking.extend(points_checked)
+                    points_on_mask.append(mask_point)
 
-                            break
-                if len(points_checking) > 0:
+                if len(points_checking) > 0 and debug:
                     rgb_img = cv2.cvtColor(mask["mask"], cv2.COLOR_GRAY2BGR)
-                    for point_on_m, point_outside_m in points_checking:
-                        cv2.circle(rgb_img, tuple(point_on_m), 2, (255, 0, 0), -1)
-                        cv2.circle(rgb_img, tuple(point_outside_m), 2, (0, 0, 255), -1)
+                    for point in points_checking:
+                        cv2.circle(rgb_img, tuple(point), 2, (0, 0, 255), -1)
+                    for point in points_on_mask:
+                        cv2.circle(rgb_img, tuple(point), 2, (255, 0, 0), -1)
                     cv2.imshow('points being checked', rgb_img)
                     cv2.waitKey(0)
 
@@ -257,6 +228,66 @@ class Controller:
     def has_object_between_fingers(self):
         return self.move_robot.get_gripper_distance() > 0.001
 
+    def check_for_valid_gripper_point(self, mask_center, mask, direction_to_check, np_scaled_depth_image, depth_margin=8):
+        points_checking = []
+        point_on_mask = None
+        is_valid_grasp = True
+        for i in range(30, 200):
+            point_to_check = np.array(np.round(mask_center + direction_to_check * i), dtype=np.int32)
+            if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
+                point_on_mask = np.array(np.round(point_to_check - direction_to_check * 10), dtype=np.int32)
+                point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
+                                                             np_scaled_depth_image)
+                offset_point = np.array(np.round(point_to_check + direction_to_check * 8), dtype=np.int32)
+                offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
+                                                            np_scaled_depth_image)
+                rotated_direction_to_check = np.array([-direction_to_check[1], direction_to_check[0]])
+                offset_point_2 = np.array(np.round(offset_point + rotated_direction_to_check * 5), dtype=np.int32)
+                offset_point_2_z = self.surface_normals.get_z(offset_point_2[0], offset_point_2[1],
+                                                              np_scaled_depth_image)
+                offset_point_3 = np.array(np.round(offset_point - rotated_direction_to_check * 5), dtype=np.int32)
+                offset_point_3_z = self.surface_normals.get_z(offset_point_3[0], offset_point_3[1],
+                                                              np_scaled_depth_image)
+                offset_point_4 = np.array(np.round(offset_point + direction_to_check * 4), dtype=np.int32)
+                offset_point_4_z = self.surface_normals.get_z(offset_point_4[0], offset_point_4[1],
+                                                            np_scaled_depth_image)
+                offset_point_5 = np.array(np.round(offset_point_4 + rotated_direction_to_check * 5), dtype=np.int32)
+                offset_point_5_z = self.surface_normals.get_z(offset_point_5[0], offset_point_5[1],
+                                                              np_scaled_depth_image)
+                offset_point_6 = np.array(np.round(offset_point_4 - rotated_direction_to_check * 5), dtype=np.int32)
+                offset_point_6_z = self.surface_normals.get_z(offset_point_6[0], offset_point_6[1],
+                                                              np_scaled_depth_image)
+
+                z_points = [
+                    offset_point_z,
+                    offset_point_2_z,
+                    offset_point_3_z,
+                    offset_point_4_z,
+                    offset_point_5_z,
+                    offset_point_6_z,
+                ]
+
+                points_checking = [
+                    offset_point,
+                    offset_point_2,
+                    offset_point_3,
+                    offset_point_4,
+                    offset_point_5,
+                    offset_point_6
+                ]
+
+                for z_point in z_points:
+                    diff = point_on_mask_z - z_point
+                    if diff <= depth_margin:
+                        print(
+                            f'z difference is less than {depth_margin} mm for one or more points. diff: {diff}, on mask: {point_on_mask_z}, offset: {z_point}')
+                        mask["ignored"] = True
+                        mask["ignore_reason"] += "not enough space for fingers, "
+                        is_valid_grasp = False
+                        break
+
+                break
+        return is_valid_grasp, point_on_mask, points_checking
 
 if __name__ == "__main__":
     from simulation_camera_interface import SimulationCamera
