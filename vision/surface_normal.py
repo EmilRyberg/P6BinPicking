@@ -62,7 +62,7 @@ class SurfaceNormals:
         center_img_space = np.array(np.round(mean[0]), dtype=np.int32)
         long_vector_point = np.array(np.round(center_img_space + eigenvectors[0] * 20), dtype=np.int32)
         short_vector_point = np.array(np.round(center_img_space + eigenvectors[1] * 20), dtype=np.int32)
-        print(f'center: {center_img_space}, long: {long_vector_point}, short: {short_vector_point}')
+        #print(f'center: {center_img_space}, long: {long_vector_point}, short: {short_vector_point}')
 
         center_z = self.get_z(center_img_space[0], center_img_space[1], np_depth_image)
         center = self.aruco.calibrate(np_reference_image, center_img_space[0], center_img_space[1], center_z)
@@ -81,8 +81,6 @@ class SurfaceNormals:
 
         matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
-        print('vector in: ', normal_vector_in)
-        print('rot matrix: ', matrix)
 
         rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
         # print(rotvec)
@@ -102,7 +100,7 @@ class SurfaceNormals:
             cv2.imshow("out", rgb_img)
             cv2.waitKey(0)
 
-        return center, rotvec, normal_vector_out, relative_angle_to_z
+        return center, rotvec, normal_vector_out, relative_angle_to_z, eigenvectors[1]
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image, rotation_around_self_z=0):
         # depth = image_shifter.shift_image(depth)
