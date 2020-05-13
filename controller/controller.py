@@ -1,5 +1,5 @@
 from vision.vision import Vision
-from controller.enums import PartEnum, PartCategoryEnum
+from enums import PartEnum, PartCategoryEnum
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -34,17 +34,27 @@ class Controller:
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
-
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
         self.pick_and_place_part(PartCategoryEnum.PCB.value, debug)
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
+        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
+
+        self.capture_images()
+        self.masks = self.vision.segment(self.reference_image)
+        self.move_robot.move_to_home(speed=3)
         self.pick_and_place_part(PartCategoryEnum.BLACK_COVER.value, debug)
+
+        self.capture_images()
+        self.masks = self.vision.segment(self.reference_image)
+        self.move_robot.move_to_home(speed=3)
+        self.pick_and_place_part(PartCategoryEnum.BLUE_COVER.value, debug)
+
+        self.capture_images()
+        self.masks = self.vision.segment(self.reference_image)
+        self.move_robot.move_to_home(speed=3)
+        self.pick_and_place_part(PartCategoryEnum.BOTTOM_COVER.value, debug)
 
         #self.pick_and_place_part("pcb")
 
@@ -69,22 +79,23 @@ class Controller:
                     cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
                     cv2.waitKey()
 
-                if part == PartCategoryEnum.PCB.value:
-                    center, rotvec, normal_vector, relative_angle_to_z = self.part_position_details
+                if part == PartCategoryEnum.PCB.value or True:
+                    center, part_orientation, normal_vector, relative_angle_to_z = self.part_position_details
                     print(f'gripping {mask["part"]} at {center} with suction')
                     self.move_robot.set_tcp(self.move_robot.suction_tcp)
-                    self.move_robot.movel([0, -300, 300, 0, 3.14, 0], vel=0.8)
+                    default_orientation = Rotation.from_euler("xyz", [0, 3.14, 0]).as_rotvec() # rotz=0 is down left, counterclockwise positive
+                    self.move_robot.movej([-60, -60, -110, -190, -70, 100], vel=2) #down right above box
                     approach_center = center + 200*normal_vector
-                    pose_approach = np.concatenate((approach_center, rotvec))
-                    self.move_robot.movel(pose_approach)
-                    pose_pick = np.concatenate((center, rotvec))
-                    self.move_robot.movel(pose_pick)
+                    self.move_robot.movel2(approach_center, part_orientation) #pre pick above box
+                    self.move_robot.movel2(center, part_orientation, vel=0.2) #pick
                     self.move_robot.enable_suction()
-                    self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0])
-                    self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
-                    self.move_robot.movel([200, -200, 50, 0, 3.14, 0])
+                    lift_orientation = Rotation.from_euler("xyz", [0, 3.14, 1.57]).as_rotvec()
+                    self.move_robot.movel2([center[0], center[1], 300], lift_orientation, vel=0.2) #lift straight up
+                    self.move_robot.movej([-60, -60, -110, -190, 20, 100], vel=2) #down left above box
+                    self.move_robot.movel2([200, -200, 300], default_orientation, vel=1) #north of box, above
+                    self.move_robot.movel2([200, -200, 50], default_orientation, vel=0.4) #move straight down
                     self.move_robot.disable_suction()
-                    self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
+                    self.move_robot.movel2([200, -200, 300], default_orientation, vel=1) #move straight up
                     print("success")
                     success = True
                 else:
@@ -136,7 +147,7 @@ class Controller:
         highest_area = -1
         for index, mask in enumerate(masks):
             if mask["part"] == part and mask["area"] > highest_area and mask["ignored"] == False:
-                self.part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=-1.57)
+                self.part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=0.78) #0.78=down right, clockwise positive
                 if self.part_position_details[3] < 0.8: # check how flat it is (relative angle to reference z)
                     highest_index = index
                     highest_area = mask["area"]
@@ -205,5 +216,5 @@ if __name__ == "__main__":
     from simulation_connector import SimulationConnector
     connector = SimulationConnector(2000)
     camera = SimulationCamera(connector)
-    controller = Controller(connector, camera)
+    controller = Controller(connector, camera, "vision/model_final_sim.pth")
     controller.main_flow(1)
