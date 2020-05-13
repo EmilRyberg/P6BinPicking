@@ -5,13 +5,11 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 from scipy.spatial.transform import Rotation
-from vision.vision import Vision
 
 
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
-        self.vision = Vision()
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -75,11 +73,16 @@ class SurfaceNormals:
 
         vector1 = long_vector - center  # from tests this should be x (if normal is pointing in)
         vector2 = short_vector - center  # and this y
-        normal_vector_in = self.__calculate_normal(vector1, vector2)
+        vector1 = vector1 / np.linalg.norm(vector1)
+        vector2 = vector2 / np.linalg.norm(vector2)
+        normal_vector_in = np.cross(vector1, vector2)
+        normal_vector_in = normal_vector_in / np.linalg.norm(normal_vector_in)
         normal_vector_out = normal_vector_in * -1
 
         matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
+        print('vector in: ', normal_vector_in)
+        print('rot matrix: ', matrix)
 
         rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
         # print(rotvec)
@@ -91,8 +94,8 @@ class SurfaceNormals:
         # return A, normal_vector_out
         if debug:
             # debug/test stuff
-            np_mask_255 = np_mask * 255
-            rgb_img = cv2.cvtColor(np_mask_255, cv2.COLOR_GRAY2BGR)
+            #np_mask_255 = np_mask * 255
+            rgb_img = cv2.cvtColor(np_mask, cv2.COLOR_GRAY2BGR)
             cv2.circle(rgb_img, tuple(center_img_space), 5, 0)
             cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[0] * 20), (0, 0, 255))
             cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[1] * 20), (0, 255, 0))
@@ -122,7 +125,10 @@ class SurfaceNormals:
 
         vector1 = B - A
         vector2 = C - A
-        normal_vector_in = self.__calculate_normal(vector1, vector2)
+        vector1 = vector1 / np.linalg.norm(vector1)
+        vector2 = vector2 / np.linalg.norm(vector2)
+        normal_vector_in = np.cross(vector1, vector2)
+        normal_vector_in = normal_vector_in / np.linalg.norm(normal_vector_in)
         normal_vector_out = normal_vector_in * -1
 
         matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
@@ -151,13 +157,6 @@ class SurfaceNormals:
         orientation = R @ rotation_matrix
         rotvec = Rotation.from_matrix(orientation).as_rotvec()
         return rotvec
-
-    def __calculate_normal(self, vector1, vector2):
-        vector1 = vector1 / np.linalg.norm(vector1)
-        vector2 = vector2 / np.linalg.norm(vector2)
-        normal_vector = np.cross(vector1, vector2)
-        normal_vector = normal_vector / np.linalg.norm(normal_vector)
-        return normal_vector
 
     def find_contour(self, np_mask):
         mask = np_mask.copy()

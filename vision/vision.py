@@ -21,7 +21,7 @@ ORIENTATION_MODEL_PATH = "orientation_cnn.pth"
 
 
 class Vision:
-    def __init__(self):
+    def __init__(self, segmentation_weight_path):
         self.current_directory = os.getcwd()
         yolo_cfg_path_absolute = self.current_directory + YOLOCFGPATH
         self.image_path = self.current_directory + "/" + IMAGE_NAME
@@ -36,7 +36,7 @@ class Vision:
         #self.orientationCNN.load_state_dict(torch.load(ORIENTATION_MODEL_PATH))
         #self.shifter = image_shifter.RuntimeShifter
         self.calibrate = Calibration()
-        self.segmentation_detector = InstanceDetector('vision/model_final_sim.pth')
+        self.segmentation_detector = InstanceDetector(segmentation_weight_path)
 
     def __del__(self):
         pass

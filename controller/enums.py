@@ -16,6 +16,13 @@ class PartEnum(Enum):
     INVALID = 11
 
 
+class PartCategoryEnum(Enum):
+    PCB = "PCB"
+    BOTTOM_COVER = "BottomCover"
+    BLACK_COVER = "BlackCover"
+    WHITE_COVER = "WhiteCover"
+    BLUE_COVER = "BlueCover"
+
 
 class OrientationEnum(Enum):
     HORIZONTAL = 0

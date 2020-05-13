@@ -1,5 +1,5 @@
 from vision.vision import Vision
-#from enums import PartEnum
+from controller.enums import PartEnum, PartCategoryEnum
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -11,10 +11,10 @@ from scipy.spatial.transform import Rotation
 
 
 class Controller:
-    def __init__(self, move_robot, camera_interface: CameraInterface):
+    def __init__(self, move_robot, camera_interface: CameraInterface, segmentation_weight_path):
         self.move_robot = move_robot
         self.camera = camera_interface
-        self.vision = Vision()
+        self.vision = Vision(segmentation_weight_path)
         self.box_detector = BoxDetector()
         self.surface_normals = SurfaceNormals()
         self.detected_objects = None
@@ -30,59 +30,82 @@ class Controller:
 
         print("[I] Controller running")
 
-    def main_flow(self, colour_part_id):
+    def main_flow(self, colour_part_id, debug=False):
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("WhiteCover")
+        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("PCB")
+        self.pick_and_place_part(PartCategoryEnum.PCB.value, debug)
 
         self.capture_images()
         self.masks = self.vision.segment(self.reference_image)
         self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part("BlueCover")
+        self.pick_and_place_part(PartCategoryEnum.BLACK_COVER.value, debug)
 
         #self.pick_and_place_part("pcb")
 
-    def pick_and_place_part(self, part):
+    def pick_and_place_part(self, part, debug=False):
         success = False
         self.unsuccessful_grip_shake_counter = 0
-        while success == False and self.unsuccessful_grip_shake_counter <= 3:
+        while success == False and self.unsuccessful_grip_shake_counter < 3:
+            print("finding part: ", part)
             mask = self.find_best_mask_by_part(part, self.masks)
             if mask == False:
                 print("no appropriate part found")
-                print(f"shaking, try {self.unsuccessful_grip_shake_counter}/3")
+                print(f"shaking, try {self.unsuccessful_grip_shake_counter+1}/3")
                 self.move_box()
                 self.move_robot.move_out_of_view()
                 self.capture_images()
                 self.masks = self.vision.segment(self.reference_image)
-                self.unsuccessful_grip_shake_counter +=1
+                self.unsuccessful_grip_shake_counter += 1
             else:
                 np_mask = np.asarray(mask["mask"])
-                applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
-                cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
-                cv2.waitKey()
-                center, rotvec, normal_vector, relative_angle_to_z = self.part_position_details
-                print(f'gripping {mask["part"]} at {center}')
-                self.move_robot.set_tcp(self.move_robot.suction_tcp)
-                self.move_robot.movel([0, -300, 300, 0, 3.14, 0], vel=0.8)
-                approach_center = center + 200*normal_vector
-                pose_approach = np.concatenate((approach_center, rotvec))
-                self.move_robot.movel(pose_approach)
-                pose_pick = np.concatenate((center, rotvec))
-                self.move_robot.movel(pose_pick)
-                self.move_robot.enable_suction()
-                self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0])
-                self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
-                self.move_robot.movel([200, -200, 50, 0, 3.14, 0])
-                self.move_robot.disable_suction()
-                self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
-                print("success")
-                success = True
+                if debug:
+                    applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
+                    cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
+                    cv2.waitKey()
+
+                if part == PartCategoryEnum.PCB.value:
+                    center, rotvec, normal_vector, relative_angle_to_z = self.part_position_details
+                    print(f'gripping {mask["part"]} at {center} with suction')
+                    self.move_robot.set_tcp(self.move_robot.suction_tcp)
+                    self.move_robot.movel([0, -300, 300, 0, 3.14, 0], vel=0.8)
+                    approach_center = center + 200*normal_vector
+                    pose_approach = np.concatenate((approach_center, rotvec))
+                    self.move_robot.movel(pose_approach)
+                    pose_pick = np.concatenate((center, rotvec))
+                    self.move_robot.movel(pose_pick)
+                    self.move_robot.enable_suction()
+                    self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0])
+                    self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
+                    self.move_robot.movel([200, -200, 50, 0, 3.14, 0])
+                    self.move_robot.disable_suction()
+                    self.move_robot.movel([200, -200, 300, 0, 3.14, 0])
+                    print("success")
+                    success = True
+                else:
+                    center, rotvec, normal_vector, relative_angle_to_z = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0)
+                    print(f'gripping {mask["part"]} at {center} with gripper')
+                    self.move_robot.set_tcp(self.move_robot.gripper_tcp)
+                    self.move_robot.movel([0, -300, 300, 0, np.pi, 0], vel=0.8)
+                    approach_center = center + 200*normal_vector
+                    pose_approach = np.concatenate((approach_center, rotvec))
+                    self.move_robot.movel(pose_approach)
+                    pose_pick = np.concatenate((center - 25*normal_vector, rotvec))
+                    self.move_robot.close_gripper(50)
+                    self.move_robot.movel(pose_pick)
+                    self.move_robot.close_gripper()
+                    self.move_robot.movel([center[0], center[1], 300, 0, np.pi, 0])
+                    self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
+                    self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
+                    self.move_robot.open_gripper()
+                    self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
+                    print("success")
+                    success = True
                 """
                 if random.randint(0, 10) > 9:
                     success = True
