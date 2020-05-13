@@ -102,7 +102,7 @@ class SurfaceNormals:
             cv2.imshow("out", rgb_img)
             cv2.waitKey(0)
 
-        return center, rotvec, normal_vector_out, relative_angle_to_z
+        return center, rotvec, normal_vector_out, relative_angle_to_z, eigenvectors[1]
 
     def vector_normal(self, np_mask, np_depthimage, np_reference_image, rotation_around_self_z=0):
         # depth = image_shifter.shift_image(depth)

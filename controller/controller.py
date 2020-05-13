@@ -88,7 +88,7 @@ class Controller:
                     print("success")
                     success = True
                 else:
-                    center, rotvec, normal_vector, relative_angle_to_z = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0)
+                    center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0)
                     print(f'gripping {mask["part"]} at {center} with gripper')
                     self.move_robot.set_tcp(self.move_robot.gripper_tcp)
                     self.move_robot.movel([0, -300, 300, 0, np.pi, 0], vel=0.8)
@@ -130,6 +130,64 @@ class Controller:
             if box_mask[y,x] == 0:
                 mask["ignored"] = True
                 mask["ignore_reason"] += "outside box, "
+
+            if mask["part"] != PartCategoryEnum.PCB.value:
+                center, rotvec, normal_vector, relative_angle_to_z, short_vector_2d = self.surface_normals.get_gripper_orientation(
+                    mask["mask"], self.depth_image, self.reference_image, 0)
+                print('mask center: ', mask["center"])
+                mask_center = np.asarray(mask["center"], dtype=np.int32)
+                print('mask shape: ', mask["mask"].shape)
+                pil_depth = pimg.fromarray(self.depth_image)
+                pil_depth = pil_depth.resize((1920, 1080))
+                np_rescaled_depth_image = np.asarray(pil_depth)
+                points_checking = []
+                print('short vector 2d:', short_vector_2d)
+                for i in range(30, 200):
+                    point_to_check = np.array(np.round(mask_center + short_vector_2d * i), dtype=np.int32)
+                    if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
+                        print('found zero point', point_to_check)
+                        point_on_mask = np.array(np.round(point_to_check - short_vector_2d * 10), dtype=np.int32)
+                        point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
+                                                                     np_rescaled_depth_image)
+                        offset_point = np.array(np.round(point_to_check + short_vector_2d * 5), dtype=np.int32)
+                        offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
+                                                                    np_rescaled_depth_image)
+                        z_difference = point_on_mask_z - offset_point_z
+                        points_checking.append((point_on_mask, offset_point))
+                        if z_difference <= 10:
+                            print(
+                                f'height difference is less than 10 mm. diff: {z_difference}, on mask: {point_on_mask_z}, offset: {offset_point_z}')
+                            mask["ignored"] = True
+                            mask["ignore_reason"] += "not enough space for fingers, "
+
+                        break
+                if not mask["ignored"]:  # only check if first side is clear
+                    for i in range(30, 200):
+                        point_to_check = np.array(np.round(mask_center - short_vector_2d * i), dtype=np.int32)
+                        if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
+                            print('found zero point', point_to_check)
+                            point_on_mask = np.array(np.round(point_to_check + short_vector_2d * 10), dtype=np.int32)
+                            point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
+                                                                         np_rescaled_depth_image)
+                            offset_point = np.array(np.round(point_to_check - short_vector_2d * 5), dtype= np.int32)
+                            offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
+                                                                        np_rescaled_depth_image)
+                            z_difference = point_on_mask_z - offset_point_z
+                            points_checking.append((point_on_mask, offset_point))
+                            if z_difference <= 10:
+                                print(
+                                    f'height difference is less than 10 mm. diff: {z_difference}, on mask: {point_on_mask_z}, offset: {offset_point_z}')
+                                mask["ignored"] = True
+                                mask["ignore_reason"] += "not enough space for fingers, "
+
+                            break
+                if len(points_checking) > 0:
+                    rgb_img = cv2.cvtColor(mask["mask"], cv2.COLOR_GRAY2BGR)
+                    for point_on_m, point_outside_m in points_checking:
+                        cv2.circle(rgb_img, tuple(point_on_m), 2, (255, 0, 0), -1)
+                        cv2.circle(rgb_img, tuple(point_outside_m), 2, (0, 0, 255), -1)
+                    cv2.imshow('points being checked', rgb_img)
+                    cv2.waitKey(0)
 
         #next, find largest mask of matching part type
         highest_index = -1
