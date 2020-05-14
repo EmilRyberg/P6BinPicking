@@ -27,40 +27,31 @@ class Controller:
         self.depth_image = None
         self.part_position_details = None
         self.first_box_move = 0
+        self.picked_parts = {PartCategoryEnum.BOTTOM_COVER.value: 0, PartCategoryEnum.PCB.value: 0, PartCategoryEnum.BLACK_COVER.value: 0, PartCategoryEnum.BLUE_COVER.value: 0, PartCategoryEnum.WHITE_COVER.value: 0}
 
         print("[I] Controller running")
 
-    def main_flow(self, colour_part_id, debug=False):
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.PCB.value, debug)
+    def main_flow(self, debug=False):
+        at_least_one_of_each_part_picked = False
+        while not at_least_one_of_each_part_picked:
+            self.capture_images()
+            self.masks = self.vision.segment(self.reference_image)
+            self.move_robot.move_to_home_suction(speed=3)
+            picked_part = self.pick_and_place_part(part="any", debug=debug)
+            self.picked_parts[picked_part] += 1
+            at_least_one_of_each_part_picked = True
+            for key, value in self.picked_parts.items():
+                if value == 0:
+                    at_least_one_of_each_part_picked = False
 
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
-
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.WHITE_COVER.value, debug)
-
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.BLUE_COVER.value, debug)
-
-        self.capture_images()
-        self.masks = self.vision.segment(self.reference_image)
-        self.move_robot.move_to_home(speed=3)
-        self.pick_and_place_part(PartCategoryEnum.BOTTOM_COVER.value, debug)
+        print("Successfully picked 5 different parts")
 
         #self.pick_and_place_part("pcb")
 
     def pick_and_place_part(self, part, debug=False):
         success = False
         self.unsuccessful_grip_shake_counter = 0
+        mask = None
         while success == False and self.unsuccessful_grip_shake_counter < 3:
             print("finding part: ", part)
             mask = self.find_best_mask_by_part(part, self.masks, debug)
@@ -117,15 +108,16 @@ class Controller:
                     self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
                     print("success")
                     success = True
-                """
-                if random.randint(0, 10) > 9:
-                    success = True
-                    print("success")
-                else:
-                    print("failed")
-                    mask["ignored"] = True"""
+        picked_part = None
         if self.unsuccessful_grip_shake_counter >= 3:
-            input(f"manually pick {part} and press enter")
+            if part == "any":
+                part = input("manually pick any part and enter the picked part")
+            else:
+                input(f"manually pick {part} and press enter")
+            picked_part = part
+        else:
+            picked_part = mask["part"]
+        return picked_part
 
     def find_best_mask_by_part(self, part, masks, debug=False):
         #first cull images by some basic criteria
@@ -142,7 +134,7 @@ class Controller:
                 mask["ignored"] = True
                 mask["ignore_reason"] += "outside box, "
 
-            if mask["part"] != PartCategoryEnum.PCB.value and mask["part"] == part and not mask["ignored"]:
+            if mask["part"] != PartCategoryEnum.PCB.value and (mask["part"] == part or part == "any") and not mask["ignored"]:
                 center, rotvec, normal_vector, relative_angle_to_z, short_vector_2d = self.surface_normals.get_gripper_orientation(
                     mask["mask"], self.depth_image, self.reference_image, 0)
                 mask_center = np.asarray(mask["center"], dtype=np.int32)
@@ -175,7 +167,7 @@ class Controller:
         highest_index = -1
         highest_area = -1
         for index, mask in enumerate(masks):
-            if mask["part"] == part and mask["area"] > highest_area and mask["ignored"] == False:
+            if (mask["part"] == part or part == "any") and mask["area"] > highest_area and mask["ignored"] == False:
                 self.part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=0.78) #0.78=down right, clockwise positive
                 if self.part_position_details[3] < 0.8: # check how flat it is (relative angle to reference z)
                     highest_index = index
@@ -196,21 +188,16 @@ class Controller:
     def move_box(self):
         grasp_location, angle = self.box_detector.box_grasp_location(self.reference_image)
         self.move_robot.set_tcp(self.move_robot.gripper_tcp)
-        self.move_robot.move_to_home()
+        self.move_robot.move_to_home_gripper()
         rot = Rotation.from_euler("XYZ", [0, 3.14, 2.35-angle])
         rot = rot.as_rotvec()
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]+20, rot[0], rot[1], rot[2]], vel=0.5)
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-80, rot[0], rot[1], rot[2]])
         self.move_robot.grasp_box()
-        if self.first_box_move == 0:
-            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 60, rot[0], rot[1], rot[2]])
-            self.move_robot.movel([grasp_location[0]+80, grasp_location[1]+80, grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
-            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
-            self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
-            self.first_box_move = 1
-        else:
-            self.move_robot.movel([grasp_location[0]-15, grasp_location[1]-15, grasp_location[2]-80, rot[0], rot[1], rot[2]])
-            self.first_box_move = 0
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 60, rot[0], rot[1], rot[2]])
+        self.move_robot.movel([grasp_location[0]+80, grasp_location[1]+80, grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
         self.move_robot.open_gripper()
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] +40, rot[0], rot[1], rot[2]])
         #print(grasp_location)
@@ -306,4 +293,4 @@ if __name__ == "__main__":
     connector = SimulationConnector(2000)
     camera = SimulationCamera(connector)
     controller = Controller(connector, camera, "vision/model_final_sim.pth")
-    controller.main_flow(1)
+    controller.main_flow(debug=False)
