@@ -70,7 +70,7 @@ class Controller:
                     cv2.imshow("picking", cv2.resize(applied_mask, (1280, 720)))
                     cv2.waitKey()
 
-                if part == PartCategoryEnum.PCB.value or True:
+                if part == PartCategoryEnum.PCB.value:
                     center, part_orientation, normal_vector, relative_angle_to_z = self.part_position_details
                     print(f'gripping {mask["part"]} at {center} with suction')
                     self.move_robot.set_tcp(self.move_robot.suction_tcp)
@@ -92,6 +92,7 @@ class Controller:
                     center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0)
                     print(f'gripping {mask["part"]} at {center} with gripper')
                     self.move_robot.set_tcp(self.move_robot.gripper_tcp)
+                    self.move_robot.move_to_home_gripper(speed=2)
                     self.move_robot.movel([0, -300, 300, 0, np.pi, 0], vel=0.8)
                     approach_center = center + 200*normal_vector
                     pose_approach = np.concatenate((approach_center, rotvec))
