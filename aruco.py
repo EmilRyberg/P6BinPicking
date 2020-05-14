@@ -25,15 +25,15 @@ class Calibration:
         # in theory the image is undistorted in HW in the camera
         default_distortion = np.array([0, 0, 0, 0, 0], dtype=np.float32)
         self.distortion = default_distortion.T
+        self.reference_image = np.array([])
 
     def calibrate(self, np_image, x_coordinate, y_coordinate, world_z):
         assert x_coordinate > 0 and y_coordinate > 0 and world_z >= 0, "[FATAL] aruco calibrate got invalid x, y or z"
         timer = time.time()
 
-        # RGB to BGR, then grayscale
-        #opencv_image = np_image[:, :, ::-1].copy()
-        opencv_image = np_image
-        opencv_image_gray = cv2.cvtColor(opencv_image, cv2.COLOR_BGR2GRAY)
+        if len(self.reference_image) == 0:
+            self.reference_image = np_image
+        opencv_image_gray = cv2.cvtColor(self.reference_image, cv2.COLOR_BGR2GRAY)
         #cv2.imshow("a", opencv_image_gray)
         #cv2.waitKey()
         (corners, detected_ids, rejected_image_points) = aruco.detectMarkers(opencv_image_gray, self.aruco_dict)

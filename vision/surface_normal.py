@@ -5,11 +5,14 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 from scipy.spatial.transform import Rotation
+from box_detector import BoxDetector
 
 
 class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
+        self.box_detector = BoxDetector()
+        self.box_height = 130
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -136,12 +139,30 @@ class SurfaceNormals:
         rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
         #print(rotvec)
 
+        a_img = np.array([Ax, Ay, Az])  # points in image space
+        b_img = np.array([Bx, By, Bz])
+        c_img = np.array([Cx, Cy, Cz])
+        vector1_img = b_img - a_img
+        vector2_img = c_img - a_img
+        vector1_img = vector1_img / np.linalg.norm(vector1_img)
+        vector2_img = vector2_img / np.linalg.norm(vector2_img)
+        normal_vector_in_img = np.cross(vector2_img, vector1_img)
+        normal_vector_in_img = normal_vector_in_img / np.linalg.norm(normal_vector_in_img)
+        normal_vector_out_img = normal_vector_in_img * -1
+        z_difference = self.box_height - a_img[2]
+        test_point = a_img + (z_difference / normal_vector_out_img[2]) * normal_vector_out_img
+        _, box_mask = self.box_detector.find_box(np_reference_image, get_mask=True)
+        normal_vector_intersects_box = False
+        if np_mask[int(test_point[1]), int(test_point[0])] == 0:
+            normal_vector_intersects_box = True
+
+
         reference_z = np.array([0, 0, 1])
         relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
 
         #print(normal_vector)
         #return A, normal_vector_out
-        return A, rotvec, normal_vector_out, relative_angle_to_z
+        return A, rotvec, normal_vector_out, relative_angle_to_z, normal_vector_intersects_box
 
     def __calculate_rotation_around_vector(self, theta, vector, rotation_matrix):
         # https://math.stackexchange.com/questions/142821/matrix-for-rotation-around-a-vector

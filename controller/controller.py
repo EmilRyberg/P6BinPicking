@@ -1,5 +1,8 @@
 from vision.vision import Vision
-from controller.enums import PartEnum, PartCategoryEnum
+try:
+    from controller.enums import PartEnum, PartCategoryEnum
+except:
+    from enums import PartEnum, PartCategoryEnum
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -71,7 +74,7 @@ class Controller:
                     cv2.waitKey(0)
 
                 if mask["part"] == PartCategoryEnum.PCB.value:
-                    center, part_orientation, normal_vector, relative_angle_to_z = self.part_position_details
+                    center, part_orientation, normal_vector, relative_angle_to_z, _ = self.part_position_details
                     print(f'gripping {mask["part"]} at {center} with suction')
                     self.move_robot.set_tcp(self.move_robot.suction_tcp)
                     default_orientation = Rotation.from_euler("xyz", [0, 3.14, 0]).as_rotvec() # rotz=0 is down left, counterclockwise positive
@@ -173,13 +176,17 @@ class Controller:
         for index, mask in enumerate(masks):
             if (mask["part"] == part or part == "any") and mask["area"] > highest_area and mask["ignored"] == False:
                 part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=0.78) #0.78=down right, clockwise positive
-                if part_position_details[3] < 0.8: # check how flat it is (relative angle to reference z)
+                if part_position_details[3] > 0.8: # check how flat it is (relative angle to reference z)
+                    mask["ignored"] = True
+                    mask["ignore_reason"] += "not flat enough, "
+                elif part_position_details[4] == True: # normal vector intersects box
+                    mask["ignored"] = True
+                    mask["ignore_reason"] += "normal vector intersects box, "
+                else:
                     self.part_position_details = part_position_details
                     highest_index = index
                     highest_area = mask["area"]
-                else:
-                    mask["ignored"] = True
-                    mask["ignore_reason"] += "not flat enough, "
+
         if highest_index == -1: #if none are acceptable
             return False
         else:
