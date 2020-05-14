@@ -83,8 +83,7 @@ class Controller:
                     lift_orientation = Rotation.from_euler("xyz", [0, 3.14, 1.57]).as_rotvec()
                     self.move_robot.movel2([center[0], center[1], 300], lift_orientation, vel=0.2) #lift straight up
                     self.move_robot.movej([-60, -60, -110, -190, 20, 100], vel=2) #down left above box
-                    self.move_robot.movel2([200, -200, 300], default_orientation, vel=1) #north of box, above
-                    self.move_robot.movel2([200, -200, 50], default_orientation, vel=0.4) #move straight down
+                    self.move_to_drop(mask["part"]) #specific drop off locations for each part
                     self.move_robot.disable_suction()
                     self.move_robot.movel2([200, -200, 300], default_orientation, vel=1) #move straight up
                     print("success")
@@ -185,6 +184,23 @@ class Controller:
             return False
         else:
             return masks[highest_index]
+
+    def move_to_drop(self, part): #black cover and white cover can cause issues with the box (cause of their location), so for them we approach a bit above and then move down before dropping
+        if part == "BlackCover":
+            pose = [self.move_robot.black_cover_drop[0], self.move_robot.black_cover_drop[1], self.move_robot.black_cover_drop[2]+50, self.move_robot.black_cover_drop[3], self.move_robot.black_cover_drop[4], self.move_robot.black_cover_drop[5]]
+            self.move_robot.movel(pose)
+            self.move_robot.movel(self.move_robot.black_cover_drop)
+        elif part == "BlueCover":
+            self.move_robot.movel(self.move_robot.blue_cover_drop)
+        elif part == "WhiteCover":
+            pose = [self.move_robot.white_cover_drop[0], self.move_robot.white_cover_drop[1], self.move_robot.white_cover_drop[2]+50, self.move_robot.white_cover_drop[3], self.move_robot.white_cover_drop[4], self.move_robot.white_cover_drop[5]]
+            self.move_robot.movel(pose)
+            self.move_robot.movel(self.move_robot.white_cover_drop)
+        elif part == "BottomCover":
+            self.move_robot.movel(self.move_robot.bottom_cover_drop)
+        elif part == "PCB":
+            self.move_robot.movel(self.move_robot.pcb_drop)
+
 
     def capture_images(self):
         self.move_robot.move_out_of_view(speed=3)
