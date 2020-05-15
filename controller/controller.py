@@ -108,6 +108,10 @@ class Controller:
                     if not self.has_object_between_fingers(0.015):
                         print("i am a clumsy robot and dropped the part :(")
                         success = False
+                        self.move_robot.move_out_of_view()
+                        self.capture_images()
+                        self.masks = self.vision.segment(self.reference_image)
+                        self.unsuccessful_grip_shake_counter += 1
                     else:
                         self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
                         self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
@@ -176,12 +180,16 @@ class Controller:
         for index, mask in enumerate(masks):
             if (mask["part"] == part or part == "any") and mask["area"] > highest_area and mask["ignored"] == False:
                 part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=0.78) #0.78=down right, clockwise positive
+                _, _, _, angle_to_z, _ = self.surface_normals.get_gripper_orientation(mask["mask"], self.depth_image, self.reference_image)
                 if part_position_details[3] > 0.8: # check how flat it is (relative angle to reference z)
                     mask["ignored"] = True
                     mask["ignore_reason"] += "not flat enough, "
                 elif part_position_details[4] == True: # normal vector intersects box
                     mask["ignored"] = True
                     mask["ignore_reason"] += "normal vector intersects box, "
+                elif angle_to_z > 0.8:
+                    mask["ignored"] = True
+                    mask["ignore_reason"] += "not flat enough (gripper calc), "
                 else:
                     self.part_position_details = part_position_details
                     highest_index = index
@@ -256,7 +264,7 @@ class Controller:
         print(f'distance between fingers: {self.move_robot.get_gripper_distance()}, threshold: {distance_threshold + 0.00005}')
         return self.move_robot.get_gripper_distance() >= distance_threshold + 0.00005  # with small sigma for floating point errors
 
-    def check_for_valid_gripper_point(self, mask_center, mask, direction_to_check, np_scaled_depth_image, depth_margin=6):
+    def check_for_valid_gripper_point(self, mask_center, mask, direction_to_check, np_scaled_depth_image, depth_margin=4):
         points_checking = []
         point_on_mask = None
         is_valid_grasp = True
@@ -343,4 +351,4 @@ if __name__ == "__main__":
     connector = SimulationConnector(2000)
     camera = SimulationCamera(connector)
     controller = Controller(connector, camera, "vision/model_final_sim.pth")
-    controller.main_flow(debug=False)
+    controller.main_flow(debug=True)

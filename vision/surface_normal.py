@@ -12,7 +12,7 @@ class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
         self.box_detector = BoxDetector()
-        self.box_height = 130
+        self.box_height = 240
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -50,7 +50,7 @@ class SurfaceNormals:
         z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
 
-    def get_gripper_orientation(self, np_mask, np_depth_image, np_reference_image, rotation_around_self_z=0, debug=False):
+    def get_gripper_orientation(self, np_mask, np_depth_image, np_reference_image, rotation_around_self_z=0, debug=True):
         # Getting the img ready for PCA
         mat = np.argwhere(np_mask != 0)
         mat[:, [0, 1]] = mat[:, [1, 0]]
