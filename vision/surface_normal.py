@@ -5,7 +5,7 @@ from PIL import Image as pimg
 import imutils
 from aruco import Calibration
 from scipy.spatial.transform import Rotation
-from box_detector import BoxDetector
+from vision.box_detector import BoxDetector
 
 
 class SurfaceNormals:
@@ -50,7 +50,7 @@ class SurfaceNormals:
         z = 1000 - depth_image[y, x] * 10  # get value in mm
         return z
 
-    def get_gripper_orientation(self, np_mask, np_depth_image, np_reference_image, rotation_around_self_z=0, debug=True):
+    def get_gripper_orientation(self, np_mask, np_depth_image, np_reference_image, rotation_around_self_z=0, debug=False):
         # Getting the img ready for PCA
         mat = np.argwhere(np_mask != 0)
         mat[:, [0, 1]] = mat[:, [1, 0]]
@@ -63,8 +63,8 @@ class SurfaceNormals:
         mean, eigenvectors = cv2.PCACompute(mat, mean=np.array([]))  # computing PCA
 
         center_img_space = np.array(np.round(mean[0]), dtype=np.int32)
-        long_vector_point = np.array(np.round(center_img_space + eigenvectors[0] * 20), dtype=np.int32)
-        short_vector_point = np.array(np.round(center_img_space + eigenvectors[1] * 20), dtype=np.int32)
+        long_vector_point = np.array(np.round(center_img_space + eigenvectors[0] * 8), dtype=np.int32)
+        short_vector_point = np.array(np.round(center_img_space + eigenvectors[1] * 8), dtype=np.int32)
         #print(f'center: {center_img_space}, long: {long_vector_point}, short: {short_vector_point}')
 
         center_z = self.get_z(center_img_space[0], center_img_space[1], np_depth_image)
@@ -82,14 +82,21 @@ class SurfaceNormals:
         normal_vector_in = normal_vector_in / np.linalg.norm(normal_vector_in)
         normal_vector_out = normal_vector_in * -1
 
+        reference_z = np.array([0, 0, 1])
+        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
+        if relative_angle_to_z >= np.pi/2:
+            print(f'Surface normal relative angle to z is greater than {np.pi/2} (actually {relative_angle_to_z}), swapping in and out vectors')
+            temp = normal_vector_in
+            normal_vector_in = normal_vector_out
+            normal_vector_out = temp
+            vector2 = vector2 * -1 # we need to swap this for right-hand coordinate system as well
+            relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
+
         matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
 
         rotvec = self.__calculate_rotation_around_vector(rotation_around_self_z, normal_vector_in, matrix)
         # print(rotvec)
-
-        reference_z = np.array([0, 0, 1])
-        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
 
         # print(normal_vector)
         # return A, normal_vector_out
@@ -97,9 +104,9 @@ class SurfaceNormals:
             # debug/test stuff
             #np_mask_255 = np_mask * 255
             rgb_img = cv2.cvtColor(np_mask, cv2.COLOR_GRAY2BGR)
-            cv2.circle(rgb_img, tuple(center_img_space), 5, 0)
-            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[0] * 20), (0, 0, 255))
-            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[1] * 20), (0, 255, 0))
+            cv2.circle(rgb_img, tuple(center_img_space), 2, 0, -1)
+            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[0] * 8), (0, 0, 255))
+            cv2.line(rgb_img, tuple(center_img_space), tuple(mean[0] + eigenvectors[1] * 8), (0, 255, 0))
             cv2.imshow("out", rgb_img)
             cv2.waitKey(0)
 
@@ -132,6 +139,16 @@ class SurfaceNormals:
         normal_vector_in = normal_vector_in / np.linalg.norm(normal_vector_in)
         normal_vector_out = normal_vector_in * -1
 
+        reference_z = np.array([0, 0, 1])
+        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
+        if relative_angle_to_z >= np.pi/2:
+            print(f'Surface normal relative angle to z is greater than {np.pi/2} (actually {relative_angle_to_z}), swapping in and out vectors')
+            temp = normal_vector_in
+            normal_vector_in = normal_vector_out
+            normal_vector_out = temp
+            vector2 = vector2 * -1  # we need to swap this for right-hand coordinate system as well
+            relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
+
         matrix = np.append(vector1.reshape((3, 1)), vector2.reshape((3, 1)), axis=1)
         matrix = np.append(matrix, normal_vector_in.reshape((3, 1)), axis=1)
         #print(matrix)
@@ -155,10 +172,6 @@ class SurfaceNormals:
         normal_vector_intersects_box = False
         if np_mask[int(test_point[1]), int(test_point[0])] == 0:
             normal_vector_intersects_box = True
-
-
-        reference_z = np.array([0, 0, 1])
-        relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
 
         #print(normal_vector)
         #return A, normal_vector_out

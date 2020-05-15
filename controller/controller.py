@@ -1,8 +1,5 @@
 from vision.vision import Vision
-try:
-    from controller.enums import PartEnum, PartCategoryEnum
-except:
-    from enums import PartEnum, PartCategoryEnum
+from controller.enums import PartEnum, PartCategoryEnum
 from vision.surface_normal import SurfaceNormals
 from PIL import Image as pimg
 import cv2
@@ -92,7 +89,7 @@ class Controller:
                     print("success")
                     success = True
                 else:
-                    center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0)
+                    center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0, debug=debug)
                     print(f'gripping {mask["part"]} at {center} with gripper')
                     self.move_robot.set_tcp(self.move_robot.gripper_tcp)
                     self.move_robot.move_to_home_gripper(speed=2)
@@ -100,12 +97,13 @@ class Controller:
                     approach_center = center + 200*normal_vector
                     pose_approach = np.concatenate((approach_center, rotvec))
                     self.move_robot.movel(pose_approach)
-                    pose_pick = np.concatenate((center - 7*normal_vector, rotvec))
+                    pose_pick = np.concatenate((center - 14*normal_vector, rotvec))
                     self.move_robot.close_gripper(45)
-                    self.move_robot.movel(pose_pick)
-                    self.move_robot.close_gripper(15, speed=1)
+                    self.move_robot.movel(pose_pick, vel=0.1)
+                    gripper_close_distance = 18
+                    self.move_robot.close_gripper(gripper_close_distance, speed=0.5)
                     self.move_robot.movel([center[0], center[1], 300, 0, np.pi, 0])
-                    if not self.has_object_between_fingers(0.015):
+                    if not self.has_object_between_fingers(gripper_close_distance/1000.0):
                         print("i am a clumsy robot and dropped the part :(")
                         success = False
                         self.move_robot.move_out_of_view()
@@ -147,7 +145,7 @@ class Controller:
 
             if mask["part"] != PartCategoryEnum.PCB.value and (mask["part"] == part or part == "any") and not mask["ignored"]:
                 center, rotvec, normal_vector, relative_angle_to_z, short_vector_2d = self.surface_normals.get_gripper_orientation(
-                    mask["mask"], self.depth_image, self.reference_image, 0)
+                    mask["mask"], self.depth_image, self.reference_image, 0, debug=debug)
                 mask_center = np.asarray(mask["center"], dtype=np.int32)
                 pil_depth = pimg.fromarray(self.depth_image)
                 pil_depth = pil_depth.resize((1920, 1080))
@@ -166,7 +164,8 @@ class Controller:
                     points_on_mask.append(mask_point)
 
                 if len(points_checking) > 0 and debug:
-                    rgb_img = cv2.cvtColor(mask["mask"], cv2.COLOR_GRAY2BGR)
+                    rgb_img = self.reference_image.copy()
+                    print('rgb_img', rgb_img.shape)
                     for point in points_checking:
                         cv2.circle(rgb_img, tuple(point), 2, (0, 0, 255), -1)
                     for point in points_on_mask:
@@ -180,7 +179,7 @@ class Controller:
         for index, mask in enumerate(masks):
             if (mask["part"] == part or part == "any") and mask["area"] > highest_area and mask["ignored"] == False:
                 part_position_details = self.surface_normals.vector_normal(mask["mask"], self.depth_image, self.reference_image, rotation_around_self_z=0.78) #0.78=down right, clockwise positive
-                _, _, _, angle_to_z, _ = self.surface_normals.get_gripper_orientation(mask["mask"], self.depth_image, self.reference_image)
+                _, _, _, angle_to_z, _ = self.surface_normals.get_gripper_orientation(mask["mask"], self.depth_image, self.reference_image, debug=debug)
                 if part_position_details[3] > 0.8: # check how flat it is (relative angle to reference z)
                     mask["ignored"] = True
                     mask["ignore_reason"] += "not flat enough, "
@@ -265,72 +264,41 @@ class Controller:
         return self.move_robot.get_gripper_distance() >= distance_threshold + 0.00005  # with small sigma for floating point errors
 
     def check_for_valid_gripper_point(self, mask_center, mask, direction_to_check, np_scaled_depth_image, depth_margin=4):
-        points_checking = []
+        points_to_check = []
         point_on_mask = None
         is_valid_grasp = True
         for i in range(30, 200):
             point_to_check = np.array(np.round(mask_center + direction_to_check * i), dtype=np.int32)
             if mask["mask"][point_to_check[1], point_to_check[0]] == 0:
-                point_on_mask = np.array(np.round(point_to_check - direction_to_check * 15), dtype=np.int32)
+
+                point_on_mask = np.array(np.round(point_to_check - direction_to_check * 5), dtype=np.int32)
                 point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
                                                              np_scaled_depth_image)
                 offset_point = np.array(np.round(point_to_check + direction_to_check * 8), dtype=np.int32)
-                offset_point_z = self.surface_normals.get_z(offset_point[0], offset_point[1],
-                                                            np_scaled_depth_image)
                 rotated_direction_to_check = np.array([-direction_to_check[1], direction_to_check[0]])
-                offset_point_2 = np.array(np.round(offset_point + rotated_direction_to_check * 5), dtype=np.int32)
-                offset_point_2_z = self.surface_normals.get_z(offset_point_2[0], offset_point_2[1],
-                                                              np_scaled_depth_image)
-                offset_point_3 = np.array(np.round(offset_point - rotated_direction_to_check * 5), dtype=np.int32)
-                offset_point_3_z = self.surface_normals.get_z(offset_point_3[0], offset_point_3[1],
-                                                              np_scaled_depth_image)
-                offset_point_4 = np.array(np.round(offset_point + direction_to_check * 8), dtype=np.int32)
-                offset_point_4_z = self.surface_normals.get_z(offset_point_4[0], offset_point_4[1],
-                                                            np_scaled_depth_image)
-                offset_point_5 = np.array(np.round(offset_point_4 + rotated_direction_to_check * 5), dtype=np.int32)
-                offset_point_5_z = self.surface_normals.get_z(offset_point_5[0], offset_point_5[1],
-                                                              np_scaled_depth_image)
-                offset_point_6 = np.array(np.round(offset_point_4 - rotated_direction_to_check * 5), dtype=np.int32)
-                offset_point_6_z = self.surface_normals.get_z(offset_point_6[0], offset_point_6[1],
-                                                              np_scaled_depth_image)
-                offset_point_7 = np.array(np.round(offset_point_4 + rotated_direction_to_check * 10), dtype=np.int32)
-                offset_point_7_z = self.surface_normals.get_z(offset_point_7[0], offset_point_7[1],
-                                                              np_scaled_depth_image)
-                offset_point_8 = np.array(np.round(offset_point_4 - rotated_direction_to_check * 10), dtype=np.int32)
-                offset_point_8_z = self.surface_normals.get_z(offset_point_8[0], offset_point_8[1],
-                                                              np_scaled_depth_image)
-                offset_point_9 = np.array(np.round(offset_point + rotated_direction_to_check * 10), dtype=np.int32)
-                offset_point_9_z = self.surface_normals.get_z(offset_point_9[0], offset_point_9[1],
-                                                              np_scaled_depth_image)
-                offset_point_10 = np.array(np.round(offset_point - rotated_direction_to_check * 10), dtype=np.int32)
-                offset_point_10_z = self.surface_normals.get_z(offset_point_10[0], offset_point_10[1],
-                                                              np_scaled_depth_image)
 
-                z_points = [
-                    offset_point_z,
-                    offset_point_2_z,
-                    offset_point_3_z,
-                    offset_point_4_z,
-                    offset_point_5_z,
-                    offset_point_6_z,
-                    offset_point_7_z,
-                    offset_point_8_z,
-                    offset_point_9_z,
-                    offset_point_10_z
-                ]
-
-                points_checking = [
+                points_to_check = [
                     offset_point,
-                    offset_point_2,
-                    offset_point_3,
-                    offset_point_4,
-                    offset_point_5,
-                    offset_point_6,
-                    offset_point_7,
-                    offset_point_8,
-                    offset_point_9,
-                    offset_point_10
+                    np.array(np.round(offset_point + rotated_direction_to_check * 5), dtype=np.int32),
+                    np.array(np.round(offset_point - rotated_direction_to_check * 5), dtype=np.int32),
+                    np.array(np.round(offset_point + rotated_direction_to_check * 10), dtype=np.int32),
+                    np.array(np.round(offset_point - rotated_direction_to_check * 10), dtype=np.int32)
                 ]
+
+                offset_point_2 = np.array(np.round(offset_point + direction_to_check * 8), dtype=np.int32)
+
+                points_to_check.extend([
+                    offset_point_2,
+                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 5), dtype=np.int32),
+                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 5), dtype=np.int32),
+                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 10), dtype=np.int32),
+                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 10), dtype=np.int32)
+                ])
+
+                z_points = []
+
+                for point in points_to_check:
+                    z_points.append(self.surface_normals.get_z(point[0], point[1], np_scaled_depth_image))
 
                 for z_point in z_points:
                     diff = point_on_mask_z - z_point
@@ -343,7 +311,7 @@ class Controller:
                         break
 
                 break
-        return is_valid_grasp, point_on_mask, points_checking
+        return is_valid_grasp, point_on_mask, points_to_check
 
 if __name__ == "__main__":
     from simulation_camera_interface import SimulationCamera
