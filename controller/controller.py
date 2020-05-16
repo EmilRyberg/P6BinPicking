@@ -92,20 +92,22 @@ class Controller:
                     center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0, debug=debug)
                     print(f'gripping {mask["part"]} at {center} with gripper')
                     self.move_robot.set_tcp(self.move_robot.gripper_tcp)
-                    self.move_robot.move_to_home_gripper(speed=2)
+                    self.move_robot.move_to_home_gripper(speed=3)
                     self.move_robot.movel([0, -300, 300, 0, np.pi, 0], vel=0.8)
                     approach_center = center + 200*normal_vector
                     pose_approach = np.concatenate((approach_center, rotvec))
                     self.move_robot.movel(pose_approach)
                     pose_pick = np.concatenate((center - 14*normal_vector, rotvec))
-                    self.move_robot.close_gripper(45)
+                    self.move_robot.close_gripper(40)
                     self.move_robot.movel(pose_pick, vel=0.1)
                     gripper_close_distance = 18
-                    self.move_robot.close_gripper(gripper_close_distance, speed=0.5)
-                    self.move_robot.movel([center[0], center[1], 300, 0, np.pi, 0])
-                    if not self.has_object_between_fingers(gripper_close_distance/1000.0):
+                    self.move_robot.close_gripper(gripper_close_distance, speed=0.5, lock=True)
+                    self.move_robot.movel([center[0], center[1], 100, 0, np.pi, 0])
+                    if not self.has_object_between_fingers((gripper_close_distance-2)/1000.0):
                         print("i am a clumsy robot and dropped the part :(")
                         success = False
+                        self.move_robot.open_gripper()
+                        self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0], vel=0.8)
                         self.move_robot.move_out_of_view()
                         self.capture_images()
                         self.masks = self.vision.segment(self.reference_image)
@@ -230,10 +232,10 @@ class Controller:
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]+20, rot[0], rot[1], rot[2]], vel=0.5)
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-80, rot[0], rot[1], rot[2]])
         self.move_robot.grasp_box()
-        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 60, rot[0], rot[1], rot[2]])
-        self.move_robot.movel([grasp_location[0]+80, grasp_location[1]+80, grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
-        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-60, rot[0], rot[1], rot[2]], vel=0.4)
-        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 10, rot[0], rot[1], rot[2]])
+        self.move_robot.movel([grasp_location[0]+200, grasp_location[1]+200, grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
+        #self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 80, rot[0], rot[1], rot[2]])
         self.move_robot.open_gripper()
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] +40, rot[0], rot[1], rot[2]])
         #print(grasp_location)
@@ -274,25 +276,25 @@ class Controller:
                 point_on_mask = np.array(np.round(point_to_check - direction_to_check * 5), dtype=np.int32)
                 point_on_mask_z = self.surface_normals.get_z(point_on_mask[0], point_on_mask[1],
                                                              np_scaled_depth_image)
-                offset_point = np.array(np.round(point_to_check + direction_to_check * 8), dtype=np.int32)
+                offset_point = np.array(np.round(point_to_check + direction_to_check * 16), dtype=np.int32)
                 rotated_direction_to_check = np.array([-direction_to_check[1], direction_to_check[0]])
 
                 points_to_check = [
                     offset_point,
-                    np.array(np.round(offset_point + rotated_direction_to_check * 5), dtype=np.int32),
-                    np.array(np.round(offset_point - rotated_direction_to_check * 5), dtype=np.int32),
-                    np.array(np.round(offset_point + rotated_direction_to_check * 10), dtype=np.int32),
-                    np.array(np.round(offset_point - rotated_direction_to_check * 10), dtype=np.int32)
+                    np.array(np.round(offset_point + rotated_direction_to_check * 15), dtype=np.int32),
+                    np.array(np.round(offset_point - rotated_direction_to_check * 15), dtype=np.int32),
+                    np.array(np.round(offset_point + rotated_direction_to_check * 30), dtype=np.int32),
+                    np.array(np.round(offset_point - rotated_direction_to_check * 30), dtype=np.int32)
                 ]
 
-                offset_point_2 = np.array(np.round(offset_point + direction_to_check * 8), dtype=np.int32)
+                offset_point_2 = np.array(np.round(offset_point + direction_to_check * 16), dtype=np.int32)
 
                 points_to_check.extend([
                     offset_point_2,
-                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 5), dtype=np.int32),
-                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 5), dtype=np.int32),
-                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 10), dtype=np.int32),
-                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 10), dtype=np.int32)
+                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 15), dtype=np.int32),
+                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 15), dtype=np.int32),
+                    np.array(np.round(offset_point_2 + rotated_direction_to_check * 30), dtype=np.int32),
+                    np.array(np.round(offset_point_2 - rotated_direction_to_check * 30), dtype=np.int32)
                 ])
 
                 z_points = []
@@ -318,5 +320,5 @@ if __name__ == "__main__":
     from simulation_connector import SimulationConnector
     connector = SimulationConnector(2000)
     camera = SimulationCamera(connector)
-    controller = Controller(connector, camera, "vision/model_final_sim.pth")
+    controller = Controller(connector, camera, "../../../../model_final_sim.pth")
     controller.main_flow(debug=True)

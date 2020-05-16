@@ -12,7 +12,7 @@ class SurfaceNormals:
     def __init__(self):
         self.aruco = Calibration()
         self.box_detector = BoxDetector()
-        self.box_height = 240
+        self.box_height = 160
 
     def find_point_in_mask(self, centre_x, centre_y, mask_contours, point_number):
         mask_contour = None
@@ -33,8 +33,10 @@ class SurfaceNormals:
             if mask_contour[i][0][1]>max_y:
                 max_y = mask_contour[i][0][1]
 
-        x_offset = int((max_x - centre_x) *0.8)
-        y_offset = int((max_y - centre_y) *0.8)
+        #x_offset = int((max_x - centre_x) *0.8)
+        #y_offset = int((max_y - centre_y) *0.8)
+        x_offset = 8
+        y_offset = 8
 
 
         if point_number == 1:
