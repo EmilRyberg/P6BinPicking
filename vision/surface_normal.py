@@ -87,7 +87,8 @@ class SurfaceNormals:
         reference_z = np.array([0, 0, 1])
         relative_angle_to_z = np.arccos(np.clip(np.dot(reference_z, normal_vector_out), -1.0, 1.0))
         if relative_angle_to_z >= np.pi/2:
-            print(f'Surface normal relative angle to z is greater than {np.pi/2} (actually {relative_angle_to_z}), swapping in and out vectors')
+            if debug:
+                print(f'Surface normal relative angle to z is greater than {np.pi/2} (actually {relative_angle_to_z}), swapping in and out vectors')
             temp = normal_vector_in
             normal_vector_in = normal_vector_out
             normal_vector_out = temp

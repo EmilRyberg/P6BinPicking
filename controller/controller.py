@@ -51,19 +51,26 @@ class Controller:
     def pick_and_place_part(self, part, debug=False):
         success = False
         self.unsuccessful_grip_shake_counter = 0
+        self.unsuccessful_grip_counter = 0
         mask = None
         while success == False and self.unsuccessful_grip_shake_counter < 3:
             print("finding part: ", part)
             mask = self.find_best_mask_by_part(part, self.masks, debug)
-            if mask == False:
-                print("no appropriate part found")
-                print(f"shaking, try {self.unsuccessful_grip_shake_counter+1}/3")
+            if mask == False or self.unsuccessful_grip_counter > 2:
+                if mask == False:
+                    print("no appropriate part found")
+                    self.unsuccessful_grip_shake_counter += 1
+                    print(f"shaking, try {self.unsuccessful_grip_shake_counter}/3")
+                if self.unsuccessful_grip_counter > 2:
+                    print("failed to pick up 3 times in a row")
+                    print("shaking...")
                 self.move_box()
                 self.move_robot.move_out_of_view()
                 self.capture_images()
                 self.masks = self.vision.segment(self.reference_image)
-                self.unsuccessful_grip_shake_counter += 1
+                self.unsuccessful_grip_counter = 0
             else:
+                self.unsuccessful_grip_shake_counter = 0
                 np_mask = np.asarray(mask["mask"])
                 if debug:
                     applied_mask = cv2.bitwise_and(self.reference_image, self.reference_image, mask=np_mask)
@@ -104,14 +111,14 @@ class Controller:
                     self.move_robot.close_gripper(gripper_close_distance, speed=0.5, lock=True)
                     self.move_robot.movel([center[0], center[1], 100, 0, np.pi, 0])
                     if not self.has_object_between_fingers(16/1000.0): # 18 is part width
-                        print("i am a clumsy robot and dropped the part :(")
+                        self.unsuccessful_grip_counter += 1
+                        print(f"dropped part, attempt {self.unsuccessful_grip_counter}/3")
                         success = False
                         self.move_robot.open_gripper()
                         self.move_robot.movel([center[0], center[1], 300, 0, 3.14, 0], vel=0.8)
                         self.move_robot.move_out_of_view()
                         self.capture_images()
                         self.masks = self.vision.segment(self.reference_image)
-                        self.unsuccessful_grip_shake_counter += 1
                     else:
                         self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
                         self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
@@ -120,7 +127,7 @@ class Controller:
                         print("success")
                         success = True
         picked_part = None
-        if self.unsuccessful_grip_shake_counter >= 3:
+        if not success:
             if part == "any":
                 part = input("manually pick any part and enter the picked part")
             else:
