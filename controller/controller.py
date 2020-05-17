@@ -100,10 +100,10 @@ class Controller:
                     pose_pick = np.concatenate((center - 14*normal_vector, rotvec))
                     self.move_robot.close_gripper(40)
                     self.move_robot.movel(pose_pick, vel=0.1)
-                    gripper_close_distance = 18
+                    gripper_close_distance = 0
                     self.move_robot.close_gripper(gripper_close_distance, speed=0.5, lock=True)
                     self.move_robot.movel([center[0], center[1], 100, 0, np.pi, 0])
-                    if not self.has_object_between_fingers((gripper_close_distance-2)/1000.0):
+                    if not self.has_object_between_fingers(16/1000.0): # 18 is part width
                         print("i am a clumsy robot and dropped the part :(")
                         success = False
                         self.move_robot.open_gripper()
@@ -235,7 +235,7 @@ class Controller:
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 10, rot[0], rot[1], rot[2]])
         self.move_robot.movel([grasp_location[0]+200, grasp_location[1]+200, grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
-        #self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 80, rot[0], rot[1], rot[2]])
+        self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
         self.move_robot.open_gripper()
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] +40, rot[0], rot[1], rot[2]])
         #print(grasp_location)
