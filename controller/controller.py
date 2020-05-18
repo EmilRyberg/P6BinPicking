@@ -32,35 +32,33 @@ class Controller:
         print("[I] Controller running")
 
     def main_flow(self, debug=False):
-        at_least_one_of_each_part_picked = False
-        while not at_least_one_of_each_part_picked:
+        at_least_x_of_each_part_picked = False
+        while not at_least_x_of_each_part_picked:
             self.capture_images()
             self.masks = self.vision.segment(self.reference_image)
             self.move_robot.move_to_home_suction(speed=3)
             picked_part = self.pick_and_place_part(part="any", debug=debug)
             self.picked_parts[picked_part] += 1
-            at_least_one_of_each_part_picked = True
+            at_least_x_of_each_part_picked = True
             for key, value in self.picked_parts.items():
-                if value == 0:
-                    at_least_one_of_each_part_picked = False
+                if value < 2:
+                    at_least_x_of_each_part_picked = False
 
-        print("Successfully picked 5 different parts")
-
-        #self.pick_and_place_part("pcb")
+        print("Successfully picked 2 sets of 5 different parts")
 
     def pick_and_place_part(self, part, debug=False):
         success = False
         self.unsuccessful_grip_shake_counter = 0
         self.unsuccessful_grip_counter = 0
         mask = None
-        while success == False and self.unsuccessful_grip_shake_counter < 3:
+        while success == False and self.unsuccessful_grip_shake_counter < 5:
             print("finding part: ", part)
             mask = self.find_best_mask_by_part(part, self.masks, debug)
             if mask == False or self.unsuccessful_grip_counter > 2:
                 if mask == False:
                     print("no appropriate part found")
                     self.unsuccessful_grip_shake_counter += 1
-                    print(f"shaking, try {self.unsuccessful_grip_shake_counter}/3")
+                    print(f"shaking, try {self.unsuccessful_grip_shake_counter}/5")
                 if self.unsuccessful_grip_counter > 2:
                     print("failed to pick up 3 times in a row")
                     print("shaking...")
@@ -80,6 +78,7 @@ class Controller:
                 if mask["part"] == PartCategoryEnum.PCB.value:
                     center, part_orientation, normal_vector, relative_angle_to_z, _ = self.part_position_details
                     print(f'gripping {mask["part"]} at {center} with suction')
+                    self.move_robot.remote_print(f"gripping {mask['part']}")
                     self.move_robot.set_tcp(self.move_robot.suction_tcp)
                     default_orientation = Rotation.from_euler("xyz", [0, 3.14, 0]).as_rotvec() # rotz=0 is down left, counterclockwise positive
                     self.move_robot.movej([-60, -60, -110, -190, -70, 100], vel=2) #down right above box
@@ -98,6 +97,7 @@ class Controller:
                 else:
                     center, rotvec, normal_vector, relative_angle_to_z, short_vector = self.surface_normals.get_gripper_orientation(np_mask, self.depth_image, self.reference_image, 0, debug=debug)
                     print(f'gripping {mask["part"]} at {center} with gripper')
+                    self.move_robot.remote_print(f"gripping {mask['part']}")
                     self.move_robot.set_tcp(self.move_robot.gripper_tcp)
                     self.move_robot.move_to_home_gripper(speed=3)
                     self.move_robot.movel([0, -300, 300, 0, np.pi, 0], vel=0.8)
@@ -109,8 +109,8 @@ class Controller:
                     self.move_robot.movel(pose_pick, vel=0.1)
                     gripper_close_distance = 0
                     self.move_robot.close_gripper(gripper_close_distance, speed=0.5, lock=True)
-                    self.move_robot.movel([center[0], center[1], 100, 0, np.pi, 0])
-                    if not self.has_object_between_fingers(16/1000.0): # 18 is part width
+                    self.move_robot.movel2([center[0], center[1], 100], rotvec)
+                    if not self.has_object_between_fingers(15/1000.0): # 18 is part width
                         self.unsuccessful_grip_counter += 1
                         print(f"dropped part, attempt {self.unsuccessful_grip_counter}/3")
                         success = False
@@ -120,10 +120,12 @@ class Controller:
                         self.capture_images()
                         self.masks = self.vision.segment(self.reference_image)
                     else:
-                        self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
-                        self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
+                        self.move_robot.movel([center[0], center[1], 200, 0, np.pi, 0], vel=0.8)
+                        #self.move_robot.movel([200, -200, 50, 0, np.pi, 0])
+                        self.move_to_drop(mask["part"])
                         self.move_robot.open_gripper()
-                        self.move_robot.movel([200, -200, 300, 0, np.pi, 0])
+                        self.move_robot.move_to_home_gripper(speed=3)
+                        #self.move_robot.movel([200, -200, 200, 0, np.pi, 0])
                         print("success")
                         success = True
         picked_part = None
@@ -211,18 +213,18 @@ class Controller:
     def move_to_drop(self, part): #black cover and white cover can cause issues with the box (cause of their location), so for them we approach a bit above and then move down before dropping
         if part == "BlackCover":
             pose = [self.move_robot.black_cover_drop[0], self.move_robot.black_cover_drop[1], self.move_robot.black_cover_drop[2]+50, self.move_robot.black_cover_drop[3], self.move_robot.black_cover_drop[4], self.move_robot.black_cover_drop[5]]
-            self.move_robot.movel(pose)
+            self.move_robot.movel(pose, vel=0.8)
             self.move_robot.movel(self.move_robot.black_cover_drop)
         elif part == "BlueCover":
-            self.move_robot.movel(self.move_robot.blue_cover_drop)
+            self.move_robot.movel(self.move_robot.blue_cover_drop, vel=0.8)
         elif part == "WhiteCover":
             pose = [self.move_robot.white_cover_drop[0], self.move_robot.white_cover_drop[1], self.move_robot.white_cover_drop[2]+50, self.move_robot.white_cover_drop[3], self.move_robot.white_cover_drop[4], self.move_robot.white_cover_drop[5]]
-            self.move_robot.movel(pose)
+            self.move_robot.movel(pose, vel=0.8)
             self.move_robot.movel(self.move_robot.white_cover_drop)
         elif part == "BottomCover":
-            self.move_robot.movel(self.move_robot.bottom_cover_drop)
+            self.move_robot.movel(self.move_robot.bottom_cover_drop, vel=0.8)
         elif part == "PCB":
-            self.move_robot.movel(self.move_robot.pcb_drop)
+            self.move_robot.movel(self.move_robot.pcb_drop, vel=0.8)
 
 
     def capture_images(self):
@@ -242,6 +244,8 @@ class Controller:
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 10, rot[0], rot[1], rot[2]])
         self.move_robot.movel([grasp_location[0]+200, grasp_location[1]+200, grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2]-10, rot[0], rot[1], rot[2]], vel=2)
+        self.move_robot.movel2([grasp_location[0]-200, grasp_location[1]+200, grasp_location[2]-10], rot, vel=2)
+        self.move_robot.movel2([grasp_location[0], grasp_location[1], grasp_location[2] - 10], rot, vel=2)
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] - 70, rot[0], rot[1], rot[2]])
         self.move_robot.open_gripper()
         self.move_robot.movel([grasp_location[0], grasp_location[1], grasp_location[2] +40, rot[0], rot[1], rot[2]])
