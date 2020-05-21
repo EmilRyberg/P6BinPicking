@@ -18,7 +18,7 @@ The libraries required to all code in the repository are listed below:
 ```
 pillow
 numpy
-opencv2
+opencv-python
 opencv-contrib-python
 imutils
 pyrealsense2
