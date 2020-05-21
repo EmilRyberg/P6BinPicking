@@ -32,5 +32,6 @@ urx
 ```
 
 If using Mac or Linux, detectron2 can be installed from [here](https://github.com/facebookresearch/detectron2).
+
 If using Windows, the Windows fork of detectron2 can be found [here](https://github.com/conansherry/detectron2).
 
