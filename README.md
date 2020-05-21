@@ -16,19 +16,21 @@ The project was carried out during Covid-19 and thus access to a physical robot 
 ### Dependencies
 The libraries required to all code in the repository are listed below:
 ```
-PIL
+pillow
 numpy
 opencv2
+opencv-contrib-python
 imutils
 pyrealsense2
 scipy
-torch
-torchvision
-aruco
+pytorch
 h5py
 detectron2
 terminaltables
 matplotlib
 urx
 ```
+
+If using Mac or Linux, detectron2 can be installed from [here](https://github.com/facebookresearch/detectron2).
+If using Windows, the Windows fork of detectron2 can be found [here](https://github.com/conansherry/detectron2).
 
